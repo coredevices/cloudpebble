@@ -443,7 +443,7 @@ def vnc_proxy(ws, emu_id):
         target_ws = ws_client.create_connection(
             f'ws://localhost:{vnc_ws_port}/',
             subprotocols=['binary'],
-            timeout=5
+            timeout=30
         )
     except Exception as e:
         logger.error(f"VNC proxy: failed to connect to QEMU websocket: {e}")
@@ -460,10 +460,12 @@ def vnc_proxy(ws, emu_id):
             while alive[0]:
                 data = ws.receive()
                 if data is None:
+                    logger.debug("VNC browser: connection closed (received None)")
                     break
                 if isinstance(data, str):
                     data = data.encode('latin-1')
                 target_ws.send_binary(data)
+        except Exception as e:
             logger.debug(f"VNC browser recv error: {e}")
         finally:
             alive[0] = False
