@@ -30,8 +30,8 @@ Source: `cloudpebble/ide/templates/ide/`
 
 | Page | Template | Route | Status |
 |------|----------|-------|--------|
-| Project List | `index.html` | `/ide/` | 🔄 In Progress |
-| Project/IDE | `project.html` | `/ide/project/[id]` | ⬜ Not Started |
+| Project List | `index.html` | `/ide/` | ✅ Done |
+| Project/IDE | `project.html` | `/ide/project/[id]` | 🔄 In Progress |
 | User Settings | `settings.html` | `/ide/settings` | ⬜ Not Started |
 | QEMU Config | `qemu-config.html` | `/ide/emulator/config` | ⬜ Not Started |
 | QEMU Sensors | `qemu-sensors.html` | `/ide/emulator/sensors` | ⬜ Not Started |
