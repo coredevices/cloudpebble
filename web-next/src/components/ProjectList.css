@@ -20,7 +20,7 @@ body {
 /* Header */
 .header {
   background-color: #292929;
-  height: 80px;
+  height: 70px;
 }
 
 .header .container {
@@ -33,19 +33,21 @@ body {
 }
 
 .cloudpebble-logo {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: normal;
   margin: 0;
   padding: 0;
-  color: white;
+  letter-spacing: 0.5px;
 }
 
 .cloudpebble-logo-cloud {
   font-weight: bold;
+  color: white;
 }
 
 .cloudpebble-logo-pebble {
   font-weight: normal;
+  color: white;
 }
 
 .header-right {
@@ -61,7 +63,7 @@ ul.nav-pills {
 }
 
 .nav-pills li {
-  margin-left: 20px;
+  margin-left: 10px;
 }
 
 .nav-pills .btn {
@@ -69,13 +71,14 @@ ul.nav-pills {
   color: white;
   border: none;
   cursor: pointer;
-  font-size: 18px;
+  font-size: 16px;
   text-transform: uppercase;
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  padding: 8px 16px;
+  padding: 10px 20px;
   border-radius: 5px;
   text-decoration: none;
   display: inline-block;
+  letter-spacing: 0.5px;
 }
 
 .nav-pills .btn:hover {
@@ -95,30 +98,32 @@ ul.nav-pills {
 
 .narrow-container {
   flex: 1;
-  padding-top: 40px;
+  padding-top: 30px;
 }
 
 /* Project list header */
 .project-list-header {
-  height: 50px;
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   margin-bottom: 20px;
 }
 
 .project-list-header h2.section-heading {
   color: white;
-  font-size: 24px;
+  font-size: 22px;
   text-transform: uppercase;
   font-weight: normal;
   margin: 0;
   padding: 0;
+  letter-spacing: 0.5px;
 }
 
 .project-list-header .buttons {
   display: flex;
-  gap: 20px;
+  gap: 15px;
+  margin: 0;
+  padding: 0;
 }
 
 /* Buttons */
@@ -128,17 +133,19 @@ ul.nav-pills {
   text-decoration: none;
   display: inline-block;
   text-transform: uppercase;
-  font-size: 18px;
+  font-size: 16px;
   text-align: center;
   white-space: nowrap;
   height: 40px;
-  width: 130px;
+  min-width: 120px;
+  padding: 0 25px;
   line-height: 40px;
   border-radius: 5px;
   background-color: white;
   color: #ff4700;
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   transition: all 300ms ease;
+  letter-spacing: 0.5px;
 }
 
 .btn:hover {
@@ -165,7 +172,7 @@ ul.nav-pills {
 .well {
   background-color: #3d3d3d;
   border-radius: 10px;
-  padding: 20px 50px;
+  padding: 30px 40px;
 }
 
 /* Table */
@@ -177,25 +184,38 @@ table.table {
 table.table th {
   text-transform: uppercase;
   text-align: left;
-  font-size: 18px;
-  font-weight: bold;
-  color: white;
-  padding-bottom: 10px;
+  font-size: 16px;
+  font-weight: normal;
+  color: #666;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #4f4f4f;
 }
 
-table.table tr {
-  height: 60px;
+table.table th:first-child {
+  width: 35%;
+}
+
+table.table th:nth-child(2) {
+  width: 35%;
+}
+
+table.table th:nth-child(3) {
+  width: 30%;
+}
+
+table.table tbody tr {
+  height: 50px;
 }
 
 table.table td {
-  border-top: 2px solid #4f4f4f;
-  font-size: 18px;
+  font-size: 16px;
+  padding: 15px 0;
+  vertical-align: middle;
 }
 
 .project-name {
   text-transform: uppercase;
-  color: white;
-  font-weight: 500;
+  font-weight: normal;
 }
 
 .project-name a {
@@ -207,8 +227,22 @@ table.table td {
   text-decoration: underline;
 }
 
+.project-last-modified {
+  color: #969696;
+}
+
+.project-last-build {
+  color: #666;
+}
+
 .muted {
   color: #666;
+}
+
+.no-projects {
+  color: #969696;
+  font-size: 16px;
+  margin-top: 10px;
 }
 
 /* Footer */
@@ -224,10 +258,21 @@ table.table td {
   align-items: center;
 }
 
+.footer-left {
+  flex: 1;
+}
+
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
 .small-print {
   color: #969696;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
 }
 
 .small-print a {
@@ -237,6 +282,34 @@ table.table td {
 
 .small-print a:hover {
   color: white;
+}
+
+/* Language selector */
+.language-selector {
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: #3d3d3d;
+  border: none;
+  border-radius: 5px;
+  color: white;
+  font-size: 14px;
+  padding: 10px 35px 10px 15px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23999' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.language-selector:focus {
+  outline: none;
+}
+
+/* Pebble logo */
+.pebble-logo {
+  color: #666;
+  font-size: 24px;
+  font-weight: 300;
+  letter-spacing: 2px;
 }
 
 /* Modal */
@@ -283,11 +356,13 @@ table.table td {
   color: white;
   text-transform: uppercase;
   font-weight: normal;
+  font-size: 18px;
   margin: 0;
+  letter-spacing: 0.5px;
 }
 
 .modal-body {
-  padding: 30px;
+  padding: 30px 40px;
   max-height: 400px;
   overflow-y: auto;
 }
@@ -295,7 +370,7 @@ table.table td {
 .modal-body p {
   text-align: center;
   color: white;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .modal-footer {
@@ -307,77 +382,90 @@ table.table td {
 }
 
 .modal-footer .btn:not(:last-child) {
-  margin-right: 20px;
+  margin-right: 15px;
 }
 
 /* Form styles in modal */
 .modal-body .form-horizontal .control-group {
-  min-height: 40px;
-  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
 }
 
-.modal-body .form-horizontal .control-group::after {
-  clear: both;
-  content: "";
-  display: table;
+.modal-body .form-horizontal .control-group:last-child {
+  margin-bottom: 0;
 }
 
 .modal-body .form-horizontal .control-group label.control-label {
-  float: left;
   text-transform: uppercase;
   color: white;
-  font-size: 16px;
-  line-height: 30px;
+  font-size: 14px;
   text-align: right;
-  width: 180px;
-  padding: 5px 20px 15px 0;
+  width: 150px;
+  padding-right: 20px;
+  flex-shrink: 0;
+  letter-spacing: 0.5px;
 }
 
 .modal-body .form-horizontal .controls {
-  margin-left: 200px;
+  flex: 1;
 }
 
 .modal-body input[type=text] {
-  height: 35px;
+  height: 40px;
   font-size: 16px;
   border: none;
-  border-radius: 10px;
-  padding: 5px 15px;
-  width: 310px;
+  border-radius: 8px;
+  padding: 0 15px;
+  width: 100%;
+  box-sizing: border-box;
   background-color: white;
   color: #333;
 }
 
+.modal-body input[type=text]:focus {
+  outline: none;
+}
+
 .modal-body select {
   -webkit-appearance: none;
+  appearance: none;
   height: 40px;
-  line-height: 30px;
-  border-radius: 10px;
+  border-radius: 8px;
   background-color: white;
   font-size: 16px;
-  width: 325px;
+  width: 100%;
   border: none;
-  padding: 5px 15px;
+  padding: 0 35px 0 15px;
   cursor: pointer;
+  box-sizing: border-box;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.modal-body select:focus {
+  outline: none;
 }
 
 .alert.alert-error {
   color: white;
   background-color: #b2171e;
-  border-radius: 10px;
-  padding: 10px 20px;
+  border-radius: 8px;
+  padding: 12px 20px;
   margin-bottom: 20px;
+  text-align: center;
 }
 
 /* Labels */
 .label {
   display: inline-block;
-  font-size: 13px;
+  font-size: 12px;
   color: white;
   border-radius: 2px;
   text-transform: uppercase;
   margin-left: 8px;
-  padding: 4px 8px;
+  padding: 3px 6px;
 }
 
 .label-success {

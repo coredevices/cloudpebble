@@ -8,6 +8,7 @@ interface Project {
   id: number;
   name: string;
   updated_at: string;
+  last_build?: string | null;
 }
 
 interface User {
@@ -22,13 +23,12 @@ interface Props {
 
 function formatDate(date: string): string {
   const d = new Date(date);
-  return d.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'long',
-    year: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).replace(',', ' –');
+  const day = d.getDate();
+  const month = d.toLocaleDateString('en-GB', { month: 'long' });
+  const year = d.getFullYear().toString().slice(-2);
+  const hours = d.getHours().toString().padStart(2, '0');
+  const minutes = d.getMinutes().toString().padStart(2, '0');
+  return `${day} ${month}, '${year} – ${hours}:${minutes}`;
 }
 
 export default function ProjectList({ projects, user }: Props) {
@@ -38,6 +38,7 @@ export default function ProjectList({ projects, user }: Props) {
   const [newProjectName, setNewProjectName] = useState('');
   const [projectType, setProjectType] = useState('native');
   const [sdkVersion, setSdkVersion] = useState('3');
+  const [template, setTemplate] = useState('empty');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
 
@@ -59,6 +60,7 @@ export default function ProjectList({ projects, user }: Props) {
           name: newProjectName,
           project_type: projectType,
           sdk_version: sdkVersion,
+          template: template,
         }),
       });
 
@@ -119,7 +121,7 @@ export default function ProjectList({ projects, user }: Props) {
               <table className="table">
                 <thead>
                   <tr>
-                    <th style={{ minWidth: 180 }}>Project</th>
+                    <th>Project</th>
                     <th>Last modified</th>
                     <th>Last built</th>
                   </tr>
@@ -134,7 +136,7 @@ export default function ProjectList({ projects, user }: Props) {
                         {formatDate(project.updated_at)}
                       </td>
                       <td className="project-last-build">
-                        <span className="muted">Never</span>
+                        {project.last_build ? formatDate(project.last_build) : <span className="muted">Never</span>}
                       </td>
                     </tr>
                   ))}
@@ -142,18 +144,31 @@ export default function ProjectList({ projects, user }: Props) {
               </table>
             </div>
           ) : (
-            <p>You don&apos;t have any projects yet.</p>
+            <p className="no-projects">You don&apos;t have any projects yet.</p>
           )}
         </div>
 
         {/* Footer */}
         <div className="footer">
           <div className="container">
-            <p className="small-print">
-              CloudPebble was created by Katharine Berry and is now run by Pebble.<br/>
-              Questions? Email us at <a href="mailto:cloudpebble@getpebble.com">cloudpebble@getpebble.com</a>. 
-              See our <a href="https://getpebble.com/legal/cookies/">cookie</a> and <a href="https://getpebble.com/legal/privacy/">privacy</a> policies.
-            </p>
+            <div className="footer-left">
+              <p className="small-print">
+                CloudPebble was created by Katharine Berry and is now run by Pebble.<br/>
+                Questions? Email us at <a href="mailto:cloudpebble@getpebble.com">cloudpebble@getpebble.com</a>. 
+                See our <a href="https://getpebble.com/legal/cookies/">cookie</a> and <a href="https://getpebble.com/legal/privacy/">privacy</a> policies.
+              </p>
+            </div>
+            <div className="footer-right">
+              <select className="language-selector" defaultValue="en">
+                <option value="en">English</option>
+                <option value="es">español</option>
+                <option value="fr">français</option>
+                <option value="de">Deutsch</option>
+                <option value="zh-cn">简体中文</option>
+                <option value="zh-tw">繁體中文</option>
+              </select>
+              <span className="pebble-logo">pebble</span>
+            </div>
           </div>
         </div>
       </div>
@@ -198,6 +213,14 @@ export default function ProjectList({ projects, user }: Props) {
                     <select value={sdkVersion} onChange={(e) => setSdkVersion(e.target.value)}>
                       <option value="2">SDK 2</option>
                       <option value="3">SDK 4</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="control-group">
+                  <label className="control-label">TEMPLATE</label>
+                  <div className="controls">
+                    <select value={template} onChange={(e) => setTemplate(e.target.value)}>
+                      <option value="empty">Empty project</option>
                     </select>
                   </div>
                 </div>

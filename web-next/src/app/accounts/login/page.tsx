@@ -41,14 +41,14 @@ export default function LoginPage() {
     <div className="main-container">
       <div className="container-narrow">
         <div className="masthead">
-          <h3 className="muted"><a href="/" className="muted">CLOUDPEBBLE</a></h3>
+          <h3 className="muted"><a href="/">CLOUDPEBBLE</a></h3>
         </div>
         <div className="row-fluid">
           <div className="span12 well">
             {error && (
               <div className="alert alert-error">{error}</div>
             )}
-            <form className="form-horizontal" onSubmit={handleSubmit} style={{ marginBottom: 0 }}>
+            <form className="form-horizontal" onSubmit={handleSubmit}>
               <div className="control-group">
                 <label className="control-label">USERNAME:</label>
                 <div className="controls">
@@ -72,13 +72,13 @@ export default function LoginPage() {
                   />
                 </div>
               </div>
-              <div className="form-actions" style={{ marginBottom: 0, paddingBottom: 0 }}>
+              <div className="form-actions">
                 <p>
                   <button className="btn btn-primary" type="submit" disabled={loading}>
                     {loading ? 'LOGGING IN...' : 'LOG IN'}
                   </button>
                 </p>
-                <p style={{ marginBottom: 0 }}>
+                <p>
                   <a href="/accounts/password/reset/">Forgotten password?</a>
                 </p>
               </div>
