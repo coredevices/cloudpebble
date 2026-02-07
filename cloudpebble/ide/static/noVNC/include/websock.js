@@ -289,11 +289,10 @@ function Websock() {
             var ws_schema = uri.match(/^([a-z]+):\/\//)[1];
             protocols = this.init(protocols, ws_schema);
 
-            this._websocket = new WebSocket(uri, protocols);
-
-            if (protocols.indexOf('binary') >= 0) {
-                this._websocket.binaryType = 'arraybuffer';
-            }
+            // Don't pass protocols to avoid subprotocol negotiation failure
+            // when server doesn't respond with Sec-WebSocket-Protocol header
+            this._websocket = new WebSocket(uri);
+            this._websocket.binaryType = 'arraybuffer';
 
             this._websocket.onmessage = this._recv_message.bind(this);
             this._websocket.onopen = (function () {

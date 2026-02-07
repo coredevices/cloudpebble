@@ -628,7 +628,7 @@ var REGEXES = _.mapObject(JSON.parse('{{regexes_json|escapejs}}'), function(v) {
 // Because there's apparently no good way to get these urls into javascript...
 var URL_VNC_INCLUDES = ["{% static 'noVNC/include/util.js' %}?v=7",
                         "{% static 'noVNC/include/base64.js' %}?v=2",
-                        "{% static 'noVNC/include/websock.js' %}?v=2",
+                        "{% static 'noVNC/include/websock.js' %}?v=3",
                         "{% static 'noVNC/include/des.js' %}?v=2",
                         "{% static 'noVNC/include/keysymdef.js' %}?v=2",
                         "{% static 'noVNC/include/keyboard.js' %}?v=2",
