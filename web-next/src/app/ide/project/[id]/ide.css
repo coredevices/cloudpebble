@@ -1,0 +1,1405 @@
+/* Temporary, for Android. */
+#android-beta-link {
+    text-decoration: underline;
+}
+
+/* New stuff. */
+
+/* Page layout framework */
+
+/* This disables bouncing in Safari */
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+strong {
+    color: white;
+}
+
+.project-container {
+    position: absolute;
+    top: 50px;
+    bottom: 50px;
+    width: 100%;
+    background-color: red; /* This should always be completely obscured. */
+}
+
+#sidebar {
+    background-color: #292929;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    overflow: auto;
+    width: 250px;
+    font-family: PFD-Regular, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: large;
+    padding-left: 40px;
+
+    -webkit-transition: top 0.5s, padding-top 0.5s;
+    -moz-transition: top 0.5s, padding-top 0.5s;
+    -ms-transition: top 0.5s, padding-top 0.5s;
+    -o-transition: top 0.5s, padding-top 0.5s;
+    transition: top 0.5s, padding-top 0.5s;
+}
+
+#sidebar.with-emulator {
+    top: 230px;
+    padding-top: 20px;
+}
+
+.header {
+    height: 50px;
+}
+
+.cloudpebble-logo {
+    line-height: 55px;
+}
+
+ul.nav-pills {
+    line-height: 55px;
+}
+
+.footer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding-left: 20px;
+    padding-right: 20px;
+    overflow: hidden;
+    height: 50px;
+}
+
+.footer .pebble-logo {
+    padding-top: 13px;
+}
+
+.footer .pebble-logo img {
+    vertical-align: middle;
+    margin-top: -6px;
+}
+
+.footer .pebble-logo .katharine-at {
+    margin-top: 6px;
+    display: inline-block;
+}
+
+/* Main content */
+
+#pane-parent {
+    background: #333333 url('/ide/img/background-logo.png') no-repeat center;
+    position: absolute;
+    top: 0;
+    left: 285px;
+    bottom: 0;
+    right: 0;
+}
+
+#main-pane {
+    background: #333333;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    overflow: auto;
+}
+
+/* Sidebar */
+
+.nav-list .nav-header {
+    text-transform: uppercase;
+    color: #767676;
+}
+
+.nav-list .active {
+    color: white;
+    background-color: #333333;
+}
+
+.nav-list li.nav-section {
+    margin-top: 30px;
+}
+
+.nav-list li {
+    padding-top: 6px;
+    padding-bottom: 6px;
+    margin-top: 0;
+    margin-bottom: 0;
+    margin-left: -10px;
+    padding-left: 10px;
+    border-bottom-left-radius: 7px;
+    border-top-left-radius: 7px;
+}
+
+.nav-list .project-name {
+    color: #adadad;
+    border: 2px solid #333333;
+    display: inline-block;
+    border-radius: 5px;
+    padding: 4px 15px 2px;
+    margin-left: -15px;
+    margin-bottom: 12px;
+}
+
+.nav-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+#worker-files {
+    margin-top: 0;
+}
+
+/* Emulator */
+
+#emulator-container {
+    -webkit-transition: height 0.5s;
+    -moz-transition: height 0.5s;
+    -ms-transition: height 0.5s;
+    -o-transition: height 0.5s;
+    transition: height 0.5s;
+    width: 250px;
+    padding-left: 18px;
+    padding-right: 17px;
+    height: 230px;
+    margin-bottom: 20px;
+    text-align: center;
+    position: absolute;
+    top: 0;
+    left: 0;
+    background-color: #292929;
+    background-repeat: no-repeat;
+    background-origin: content-box;
+    background-position: center -76px;
+    background-image: url('/ide/img/pebbles/tintin-black.png');
+}
+
+#emulator-container canvas {
+    position: absolute;
+    top: 28px;
+    left: 71px;
+    background-color: #aaa;
+}
+
+#emulator-container.emulator-round canvas {
+    left: 53px;
+    border-radius: 100px;
+}
+#emulator-container.emulator-round {
+    background-image: url('/ide/img/pebbles/black-20mm-hole.png');
+    background-position: center -59px;
+}
+#emulator-container.emulator-round .configure {
+    right: 10px;
+}
+.emulator-round .select.qemu-button {
+    left: 239px;
+    top: 100px;
+}
+.emulator-round .down.qemu-button {
+	-webkit-transform: rotate(30deg);
+	    -ms-transform: rotate(30deg);
+	        transform: rotate(30deg);
+    left: 225px;
+    top: 134px;
+}
+.emulator-round .up.qemu-button {
+    left: 225px;
+    top: 29px;
+	-webkit-transform: rotate(330deg);
+	    -ms-transform: rotate(330deg);
+	        transform: rotate(330deg);
+}
+.emulator-round .back.qemu-button {
+    top: 80px;
+    left: 16px;
+}
+
+#emulator-container.emulator-robert canvas {
+    top: 0;
+    left: 45px;
+}
+
+#emulator-container.emulator-robert {
+    width: 285px;
+    padding: 0;
+}
+
+#emulator-container.emulator-robert .configure {
+    right: inherit;
+    left: 7px;
+}
+
+.emulator-robert .select.qemu-button,
+.emulator-robert .up.qemu-button,
+.emulator-robert .down.qemu-button {
+    left: 248px;
+}
+
+.emulator-robert .back.qemu-button {
+    left: 11px;
+}
+
+.qemu-button {
+    position: absolute;
+    cursor: pointer;
+    background-color: rgba(255, 0, 0, 0.2);
+    border-radius: 8px;
+}
+.emulator-round .qemu-button {
+    border-radius: 20px;
+}
+.qemu-button.up, .qemu-button.down, .qemu-button.back {
+    width: 35px;
+    height: 73px;
+}
+
+.qemu-button.up {
+    top: 5px;
+    left: 226px;
+}
+
+.qemu-button.select {
+    width: 35px;
+    height: 37px;
+    left: 226px;
+    top: 93px;
+}
+
+.qemu-button.down {
+    top: 147px;
+    left: 226px;
+}
+
+.qemu-button.back {
+    top: 37px;
+    left: 26px;
+}
+
+#emulator-container .power {
+    position: absolute;
+    cursor: pointer;
+    top: 196px;
+    left: 20px;
+}
+
+#emulator-container .configure {
+    position: absolute;
+    cursor: pointer;
+    top: 200px;
+    right: 71px;
+}
+
+/* Emulator sensor prompt */
+
+#qemu-sensor-prompt .modal-body {
+    text-align: center;
+    padding-bottom: 0;
+}
+
+.cpbl-url, .cpbl-token {
+    font-size: xx-large;
+    color: white;
+    display: inline-block;
+    margin: 10px;
+}
+
+.cpbl-token {
+    letter-spacing: 2px;
+}
+
+/* Editor */
+
+.CodeMirror {
+    font-family: Menlo, 'Deja Vu Sans Mono', monospace;
+    font-size: 13px;
+    line-height: 18px;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 50px;
+    height: 100% !important;
+}
+
+.editor-button-wrapper {
+    position: absolute;
+    width: 40px;
+    margin-left: 5px;
+    margin-right: 5px;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.editor-button-wrapper .btn {
+    margin-top: 10px;
+}
+
+.run-btn {
+    background: #00B293 url('/ide/img/run.png') no-repeat 15px; /* optically centred */
+}
+
+.run-btn:hover {
+    background-color: #00B293;
+}
+
+.save-btn {
+    background: white url('/ide/img/save.png') no-repeat center;
+}
+
+.rename-btn {
+    background: white url('/ide/img/rename.png') no-repeat center;
+}
+
+.reload-btn {
+    background: white url('/ide/img/reload.png') no-repeat center;
+}
+
+.delete-btn {
+    background: #e5171f url('/ide/img/delete.png') no-repeat center;
+}
+
+.ib-btn {
+    background: white url('/ide/img/ib.png') no-repeat center;
+}
+
+.ib-btn.active {
+    background-color: #aaa;
+}
+
+.delete-btn:hover {
+    background-color: #e5171f;
+}
+
+.editor-button-wrapper .btn:hover {
+    opacity: 0.8;
+}
+
+.muted {
+  color: #999999;
+}
+
+.CodeMirror-hints {
+    background-color: #333333;
+    border-color: #292929;
+}
+
+.CodeMirror-hint {
+    color: white;
+}
+
+.save-and-run {
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.save-and-run > img {
+    margin-top: -4px;
+}
+
+.popover.doc-popover .popover-content {
+    max-height: 400px;
+    overflow: scroll;
+    font-size: smaller;
+    padding-bottom: 0;
+}
+
+.doc-popover table th,
+.doc-popover table td{
+    vertical-align: top;
+    padding-right: 10px;
+    padding-bottom: 5px;
+}
+
+.doc-popover table th {
+    color: #aaaaaa;
+    font-weight: normal;
+    text-align: right;
+}
+.doc-popover {
+    width: 500px;
+    max-width: 500px;
+    line-height: 16px;
+    color: white;
+}
+
+.popover-declaration, .popover-params .param-name {
+    font-family: Menlo, 'Deja Vu Sans Mono', monospace;
+}
+
+.doc-popover p {
+    padding: 0;
+    margin: 0;
+}
+
+.doc-popover tr {
+    margin-bottom: 5px;
+}
+
+.autocomplete-summary {
+    position: absolute;
+    height: 20px;
+    z-index: 10002;
+    background-color: #333;
+    border-bottom-left-radius: 3px;
+    border-bottom-right-radius: 3px;
+    box-shadow: 2px 3px 5px rgba(0,0,0,0.2);
+    border: 1px solid #292929;
+    padding: 2px;
+}
+
+.autocomplete-summary,
+.autocomplete-summary > p {
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-wrap: none;
+    overflow: hidden;
+}
+
+/* Settings */
+
+.settings-pane .well {
+    margin: 30px;
+    padding-left: 30px;
+    padding-right: 30px;
+    width: 650px;
+}
+
+.settings-pane .form-horizontal .control-group label {
+    width: 150px;
+}
+
+.settings-pane .help-block {
+    margin-left: 170px;
+}
+
+.settings-pane input:not([type=checkbox]) {
+    width: 435px;
+}
+
+.settings-pane select {
+    width: 450px;
+}
+
+.settings-uuid-control input[type=text] {
+    width: 360px;
+}
+
+table.kv-table .kv-key {
+    width: 200px;
+    font-family: Menlo, 'Deja Vu Sans Mono', monospace;
+    border-radius: 5px;
+}
+
+table.kv-table .kv-value {
+    width: 100px;
+    border-radius: 5px;
+}
+
+table.kv-table .kv-remove {
+    width: 50px;
+    font-weight: bold;
+}
+
+.kv-remove:disabled {
+    background-color: white !important;
+}
+
+.settings-pane .form-actions {
+    padding-left: 25px;
+    padding-right: 25px;
+    width: 660px;
+}
+
+.settings-pane .form-actions .btn {
+    width: 210px;
+    margin-right: 10px;
+}
+
+.settings-pane .form-actions .btn:last-of-type {
+    margin-right: 0;
+}
+
+#export-pending-body {
+    text-align: center;
+}
+
+/* Compilation pane */
+
+.compilation-pane .well {
+    margin: 30px;
+    padding-left: 60px;
+    padding-right: 60px;
+    width: 590px;
+}
+
+.compilation-pane input:not([type=checkbox]) {
+    width: 460px;
+}
+
+.compilation-pane select {
+    width: 475px;
+}
+
+.compilation-pane form.form-horizontal label {
+    width: 90px;
+    text-align: left;
+}
+
+.compilation-pane form.form-horizontal .help-block {
+    margin-left: 110px;
+}
+
+.compilation-pane .compilation-buttons.two-buttons .btn {
+    width: 287px;
+    margin: 0 4px;
+}
+
+.compilation-pane .compilation-buttons.three-buttons .btn{
+    width: 188px;
+    margin-right: 9px;
+}
+
+.compilation-pane .compilation-buttons.four-buttons .btn{
+    width: 137px;
+    margin: 0 4px;
+}
+
+.compilation-pane .compilation-buttons.five-buttons .btn {
+    width: 111px;
+    margin: 0 2px;
+}
+
+.compilation-pane .compilation-buttons .btn:last-child {
+    margin-right: 0;
+}
+
+.compilation-pane h3 {
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+.build-stats p {
+    color: white;
+    margin-bottom: 10px;
+    font-size: large;
+}
+
+.build-stats label {
+    color: #adadad;
+    font-family: PFD-Regular, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    text-transform: uppercase;
+}
+
+table.build-results .build-id {
+    color: white;
+    font-family: PFD-Regular, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    padding-right: 30px;
+}
+
+table.build-results .build-state {
+    text-transform: uppercase;
+}
+
+table.build-results tr.success .build-state {
+    color: #00B293;
+}
+
+table.build-results tr.error .build-state {
+    color: #E5171F;
+}
+
+table.build-results tr.pending .build-state {
+    color: #3a87ad;
+}
+
+#last-compilation-qr-code img {
+    height: 164px;
+    width: 164px;
+    float: right;
+    margin-top: -10px;
+}
+
+/* GitHub pane */
+
+.github-pane .well {
+    margin: 30px;
+    padding-left: 30px;
+    padding-right: 30px;
+    width: 650px;
+}
+
+.github-pane .form-horizontal .control-group label {
+    width: 150px;
+}
+
+.github-pane .help-block {
+    margin-left: 170px;
+}
+
+.github-pane input:not([type=checkbox]):not([type=submit]) {
+    width: 435px;
+}
+
+.github-pane select {
+    width: 450px;
+}
+
+.github-actions .btn {
+    width: 250px;
+    margin-right: 20px;
+}
+
+.modal-body .running p {
+    color: white;
+    text-align: center;
+    padding: 20px;
+}
+
+/* Resources pane */
+
+.resource-pane .well {
+    margin: 30px;
+    padding-left: 30px;
+    padding-right: 30px;
+    width: 650px;
+    position: relative;
+}
+
+.resource-pane .form-horizontal .control-group label {
+    width: 150px;
+}
+
+.resource-pane .help-block {
+    margin-left: 170px;
+    clear: both;
+}
+
+.resource-pane input:not([type=checkbox]):not([type=submit]) {
+    width: 435px;
+}
+
+.resource-pane select {
+    width: 450px;
+}
+
+.resource-download-link .btn {
+    width: 300px;
+}
+
+.image-resource-preview img, .image-platform-preview img {
+    border: 2px solid #767676;
+    padding: 5px;
+    border-radius: 5px;
+    max-width: 400px;
+}
+
+.image-resource-preview p {
+    display: table-cell;
+    vertical-align: middle;
+    padding-left: 10px;
+    padding-top: 5px;
+}
+
+.image-resource-preview > div {
+    display: table-row;
+}
+
+.resource-actions .btn {
+    margin-right: 20px;
+    width: 188px;
+}
+
+
+/* Dependancies pane */
+
+.dependencies-pane .well {
+    margin: 30px;
+    padding-left: 60px;
+    padding-right: 60px;
+    width: 590px;
+}
+
+.dependencies-pane .help-block {
+    width: initial;
+    margin: initial;
+}
+
+.dependencies-header-name {
+    color: #d0d0d0;
+}
+.dependencies-header a:hover .dependencies-header-name {
+    color: inherit;
+}
+
+#dependencies-headers th.dependencies-headers-version {
+    /* version column of headers table */
+    min-width: 5em;
+}
+
+
+.package-suggestion {
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    height: 1.2em;
+    overflow: hidden;
+    display: block;
+}
+
+.package-suggestion span.package-suggestion-name {
+    font-weight: bold;
+}
+.package-suggestion span.package-suggestion-name::after {
+    content: ' - ';
+}
+
+#dependencies-form .kv-key {
+    width: 225px;
+}
+
+#dependencies-form .kv-value {
+    width: 240px;
+}
+
+.dependencies-progress p {
+    text-align: center;
+    font-size: large;
+    color: white;
+}
+
+.checkbox-table td:last-child {
+    width: 30px;
+    padding-bottom: 20px;
+}
+
+
+/* UI Editor pane */
+
+.ui-pane {
+    padding-top: 20px;
+    padding-left: 20px;
+}
+
+.ui-canvas-things {
+    width: 296px; /* PEBBLE_WIDTH*2 + a bit */
+    float: left;
+}
+
+.ui-canvas {
+    border: 4px solid gray;
+    width: 288px; /* PEBBLE_WIDTH*2 */
+    height: 336px; /* PEBBLE_HEIGHT*2  */
+}
+
+.ui-thingies {
+    width: 500px;
+    height: 100%;
+    padding-left: 20px;
+    float: left;
+}
+
+#ui-layer-list {
+    padding-top: 20px;
+}
+
+/* Timeline */
+
+.timeline-input .CodeMirror {
+    height: calc(100% - 40px) !important;
+}
+
+.timeline-buttons {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+}
+
+#timeline-status {
+    float: left;
+    margin-right: 20px;
+    margin-top: 10px;
+    font-weight: bold;
+}
+
+#timeline-status.bad {
+    color: red;
+}
+
+#timeline-status.good {
+    color: green;
+}
+
+/* Old stuff. */
+
+.CodeMirror-hints {
+  font-family: Menlo, 'Deja Vu Sans Mono', monospace;
+  z-index: 10001; /* Needs to be higher than the z-index of .CodeMirror.FullScreen */
+}
+
+.edit-resource-regex, .kv-key, .kv-value {
+  font-family: Menlo, 'Deja Vu Sans Mono', monospace;
+}
+
+.nav-list .popover {
+    max-width: 350px;
+}
+
+.CodeMirror-dialog input {
+    -webkit-border-radius: 0 !important;
+    -moz-border-radius: 0 !important;
+    border-radius: 0 !important;
+    line-height: normal !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.modal form {
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.modal .form textarea, .modal .form input[type=text] {
+    width: 515px;
+}
+
+.form label {
+    font-weight: bold;
+}
+
+.help-block.dire-warning {
+    color: rgb(185, 74, 72);
+}
+
+.img-polaroid.img-dimmer {
+    background-color: #ddd;
+}
+
+.build-log {
+    color: #999;
+}
+
+.build-log .log-success {
+    color: #468847;
+    font-weight: bold;
+}
+
+.build-log .log-error {
+    color: #b94a48;
+    font-weight: bold;
+}
+
+.build-log .log-note {
+    color: #3a87ad;
+    font-weight: bold;
+}
+
+.build-log .log-warning {
+    color: #c09853;
+    font-weight: bold;
+}
+
+.filename-link {
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.cm-s-cloudpebble span.cm-autofilled,
+.cm-s-monokai span.cm-autofilled,
+.cm-s-blackboard span.cm-autofilled,
+.cm-s-solarized.cm-s-dark span.cm-autofilled {
+    background-color: #8da9d8;
+    color: white !important;
+}
+
+.cm-s-eclipse span.cm-autofilled,
+.cm-s-solarized.cm-s-light span.cm-autofilled {
+    background-color: #e9effa;
+    color: black !important;
+}
+
+span.cm-autofilled-start  {
+    border-top-left-radius: 8px;
+    border-bottom-left-radius: 8px;
+    padding-left: 5px;
+}
+
+span.cm-autofilled-end {
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+    padding-right: 5px;
+}
+
+.CodeMirror-hint-active .muted {
+    color: #ddd;
+}
+
+/* Fix truncated autocomplete introduced when moving to hosted CSS. */
+.CodeMirror-hint {
+    max-width: 80em;
+    min-width: 30em;
+    text-overflow: ellipsis;
+}
+
+.gutter-hint-warnings {
+    width: 16px;
+}
+
+.gutter-errors {
+    width: 16px;
+}
+
+.line-hint-warning, .line-clang-warning {
+    background-color: #444623;
+}
+
+.line-clang-error {
+    background-color: #362025;
+}
+
+.cm-s-eclipse .line-clang-error,
+.cm-s-solarized.cm-s-light .line-clang-error {
+    background-color: #ffd9db;
+}
+
+
+.cm-s-eclipse .line-clang-warning,
+.cm-s-solarized.cm-s-light .line-clang-warning,
+.cm-s-eclipse .line-hint-warning,
+.cm-s-solarized.cm-s-light .line-hint-warning {
+    background-color: #fff4b7;
+}
+
+/* Override white icons on the light themes. */
+.cm-s-eclipse .icon-white,
+.cm-s-solarized.cm-s-light .icon-white{
+    /* We have to hard-code this entire thing from here, unfortunately. */
+    background-image: url(//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.2/img/glyphicons-halflings.png)
+}
+
+.fullscreen-icon {
+    position: absolute;
+    right: 25px;
+    top: 10px;
+    cursor: pointer;
+    z-index: 3;
+
+    width: 18px;
+    height: 13px;
+    background-image: url('/ide/img/fullscreen_open.png');
+}
+
+
+.CodeMirror.FullScreen .fullscreen-icon {
+    background-image: url('/ide/img/fullscreen_close.png');
+}
+
+.fullscreen-fade {
+   opacity: 0.1;
+   transition: opacity .25s ease-in-out;
+   -moz-transition: opacity .25s ease-in-out;
+   -webkit-transition: opacity .25s ease-in-out;
+}
+
+.fullscreen-fade:hover {
+    opacity: 1;
+}
+
+.fullscreen-icon-tooltip {
+    display:none;
+    color: #aaa;
+    position: absolute;
+    right: 35px;
+    width: 120px;
+    top: 7px;
+    font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
+}
+
+.CodeMirror.FullScreen {
+    height: 100%;
+    width: 100%;
+    top: 0;
+    left: 0;
+    position: absolute;
+    border: none;
+    border-radius: 0;
+    z-index: 10000; /* Needs to be greater than 9999... */
+}
+
+.screenshot-holder {
+    height: 272px;
+    width: 236px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-top: 104px;
+}
+
+.screenshot-holder-tintin-red,
+.screenshot-holder-unknown {
+    background-image: url('/ide/img/pebbles/tintin-red.png')
+}
+
+.screenshot-holder-tintin-orange {
+    background-image: url('/ide/img/pebbles/tintin-orange.png')
+}
+
+.screenshot-holder-tintin-black {
+    background-image: url('/ide/img/pebbles/tintin-black.png');
+}
+
+.screenshot-holder-tintin-white {
+    background-image: url('/ide/img/pebbles/tintin-white.png');
+}
+
+.screenshot-holder-tintin-grey {
+    background-image: url('/ide/img/pebbles/tintin-grey.png');
+}
+
+.screenshot-holder-bianca-black {
+    background-image: url('/ide/img/pebbles/bianca-black.png');
+}
+
+.screenshot-holder-bianca-silver {
+    background-image: url('/ide/img/pebbles/bianca-silver.png');
+}
+
+.screenshot-holder-tintin-blue {
+    background-image: url('/ide/img/pebbles/tintin-blue.png');
+}
+
+.screenshot-holder-tintin-pink {
+    background-image: url('/ide/img/pebbles/tintin-pink.png');
+}
+
+.screenshot-holder-tintin-green {
+    background-image: url('/ide/img/pebbles/tintin-green.png');
+}
+
+.screenshot-holder-snowy-black {
+    background-image: url('/ide/img/pebbles/snowy-black.png');
+}
+
+.screenshot-holder-snowy-white {
+    background-image: url('/ide/img/pebbles/snowy-white.png');
+}
+
+.screenshot-holder-snowy-red {
+    background-image: url('/ide/img/pebbles/snowy-red.png');
+}
+
+.screenshot-holder-bobby-black {
+    background-image: url('/ide/img/pebbles/bobby-black.png');
+}
+
+.screenshot-holder-bobby-silver {
+    background-image: url('/ide/img/pebbles/bobby-silver.png');
+}
+
+.screenshot-holder-bobby-gold {
+    background-image: url('/ide/img/pebbles/bobby-gold.png');
+}
+
+.screenshot-holder-spalding-20mm-black {
+    background-image: url('/ide/img/pebbles/spalding-20mm-black.png');
+}
+
+.screenshot-holder-spalding-20mm-silver {
+    background-image: url('/ide/img/pebbles/spalding-20mm-silver.png');
+}
+
+.screenshot-holder-spalding-14mm-black {
+    background-image: url('/ide/img/pebbles/spalding-14mm-black.png');
+}
+
+.screenshot-holder-spalding-14mm-silver {
+    background-image: url('/ide/img/pebbles/spalding-14mm-silver.png');
+}
+
+.screenshot-holder-spalding-14mm-rose-gold {
+    background-image: url('/ide/img/pebbles/spalding-14mm-rose-gold.png');
+}
+
+.screenshot-holder.screenshot-holder-snowy-black,
+.screenshot-holder.screenshot-holder-snowy-red,
+.screenshot-holder.screenshot-holder-snowy-white,
+.screenshot-holder.screenshot-holder-bobby-black,
+.screenshot-holder.screenshot-holder-bobby-silver,
+.screenshot-holder.screenshot-holder-bobby-gold {
+    padding-top: 91px;
+    padding-left: 4px;
+}
+
+.screenshot-holder.screenshot-holder-spalding-14mm-silver,
+.screenshot-holder.screenshot-holder-spalding-14mm-black,
+.screenshot-holder.screenshot-holder-spalding-20mm-silver,
+.screenshot-holder.screenshot-holder-spalding-20mm-black,
+.screenshot-holder.screenshot-holder-spalding-14mm-rose-gold {
+    padding-top: 86px;
+    height: 247px;
+    width: 251px;
+}
+
+.field-help {
+    vertical-align: middle;
+    margin-bottom: 5px;
+    margin-left: 10px;
+}
+
+#help-prompt-holder {
+    z-index: 10002;
+    position: relative;
+}
+
+#help-prompt-holder > .popover {
+    width: 300px;
+}
+
+/* Make the code-fold arrow light-gray */
+.CodeMirror-foldgutter-open,
+.CodeMirror-foldgutter-folded {
+  color: #d0d0d0;
+}
+
+#fuzzy-prompt .modal-footer {
+    padding: 0 0 10px 0;
+    text-align: left;
+}
+
+#fuzzy-results > div {
+
+    line-height: 28px;
+    cursor: pointer;
+    cursor: hand;
+    padding-left: 25px;
+}
+
+#fuzzy-results > div.selected {
+    color: white;
+    background-color: #333;
+}
+
+#fuzzy-prompt-input-value {
+    width: 100%;
+}
+
+#fuzzy-prompt-input-value:focus{
+    outline: 0;
+}
+
+.padded-modal-header {
+    padding: 10px 25px 10px 10px;
+}
+
+.filter {
+    display: inline-block;
+    padding: 6px;
+    background-color: white;
+    border-radius: 5px;
+    margin-right: 5px;
+}
+
+button#add-filter {
+    width: 2em;
+    margin-right: 15px;
+}
+
+.resource-pane .text-wrap {
+    margin-left: 170px;
+}
+.text-wrap.disabled {
+    background-color: #dfdfdf;
+}
+
+.tag-edit textarea {
+    width: 450px;
+    height: 37px;
+}
+.pane-boxes.pane-3-boxes div:nth-child(3n+1) {
+    clear: both;
+}
+.edit-resource-target-options:after {
+    clear: both;
+    content: "";
+    display: table;
+}
+
+.edit-resource-target-platforms-enabled:not(:checked) ~ .edit-resource-targets {
+    display: none;
+}
+
+.pane-boxes {
+    width: 100%;
+}
+.pane-boxes> div {
+    float: left;
+}
+.pane-3-boxes > div {
+    width: 33%;
+}
+.image-platform-preview h4 {
+    text-align: center;
+}
+
+.image-platform-preview > .help-block {
+    margin: auto;
+    text-align: center;
+}
+
+.image-platform-preview .pane-boxes h4 {
+    margin-top: 0.5em;
+}
+
+.pane-boxes img {
+    display: block;
+    margin: auto;
+    max-width: 97%;
+    box-sizing: border-box;
+}
+
+.label-list {
+    line-height: 30px;
+    min-height: 36px;
+}
+
+.label-aplite {
+    background-color: #00B293;
+}
+.label-basalt {
+    background-color: #E517E5;
+}
+.label-chalk {
+    background-color: #3a87ad;
+}
+.label-diorite {
+    background-color: #c49d4f;
+}
+
+.label-emory {
+    background-color: orangered;
+}
+
+.font-preview .font-tag-preview {
+    line-height: 40px;
+    color: white;
+}
+.btn-delete-well {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+}
+.image-platform-preview span {
+    text-align: center;
+    display: block;
+    color: white;
+    border-radius: 10px;
+    font-size: 20px;
+    line-height: 45px;
+    max-width: 98%;
+    background-color: rgba(100, 100, 100, 0.4);
+}
+.image-platform-preview span.conflict {
+    text-align: center;
+    font-size: 25px;
+    background-color: rgba(255, 0, 0, 0.4);
+    line-height: 50px;
+}
+
+#edit-resource-new-file .tag-edit, #edit-resource-new-file .variant-platform-preview {
+    display: none;
+}
+#edit-resource-new-file.file-present .tag-edit, #edit-resource-new-file.file-present .variant-platform-preview {
+    display: block;
+}
+
+.app-log {
+    position: absolute;
+    left: 0;
+    right: 50px;
+    top: 0;
+    bottom: 0;
+}
+.app-log > .build-log {
+    height: 100%;
+    overflow: auto;
+    margin: 0;
+}
+
+
+.text-icon {
+    border: 2px white solid;
+    display: inline-block;
+    text-align: center;
+    border-radius: 100px;
+    height: 1em;
+    width: 1em;
+    line-height: initial;
+    content: "?";
+}
+label .text-icon {
+    margin-left: 5px;
+}
+
+/** jquery-textext adjustments **/
+
+/* textext-core */
+.text-core .text-wrap {
+    -webkit-border-radius: 10px;
+    -moz-border-radius: 10px;
+    border-radius: 10px;
+}
+
+.text-core .text-wrap textarea,
+.text-core .text-wrap input {
+    line-height: 30px;
+    font-size: large;
+    border: none;
+}
+
+
+/* textext - arrow */
+.text-core .text-wrap .text-arrow {
+    top: 8px;
+    right: 5px;
+    z-index: 3;
+}
+/* textext - autocomplete */
+.text-core .text-wrap .text-dropdown {
+    border: none;
+    font-size: large;
+}
+
+/* textext - prompt */
+.text-core .text-wrap .text-prompt {
+    font-size: large;
+    line-height: 30px;
+}
+
+/* textext - tags */
+.text-core .text-wrap .text-tags .text-tag .text-button {
+    -webkit-border-radius: 7px;
+    -moz-border-radius: 7px;
+    border-radius: 7px;
+    height: 100%;
+    font-size: large;
+}
+
+.text-core .text-wrap .text-tags .text-tag .text-button .text-label {
+  line-height: 30px;
+}
+
+.spinner {
+    position: absolute;
+    right: 20px;
+    width: 16px;
+    height: 16px;
+}
+
+.spinner-dark {
+    background-image: url("/static/ide/img/darkspinner.gif");
+}
+.spinner-light {
+    background-image: url("/static/ide/img/spinner.gif");
+}
