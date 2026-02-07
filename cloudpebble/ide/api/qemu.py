@@ -29,11 +29,11 @@ def launch_emulator(request):
     oauth = request.POST['token']
     tz_offset = request.POST['tz_offset']
     versions = {
-        'aplite': '3.0',
-        'basalt': '3.0',
-        'chalk': '3.0',
-        'diorite': '3.0',
-        'emery': '3.0',
+        'aplite': '4',
+        'basalt': '4',
+        'chalk': '4',
+        'diorite': '4',
+        'emery': '4',
     }
     version = versions[platform]
     redis_key = 'qemu-user-%s-%s' % (user_id, platform)

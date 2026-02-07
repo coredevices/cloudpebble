@@ -58,7 +58,7 @@ def _spin_up_server(request):
         server = random.choice(list(servers))
         servers.remove(server)
         try:
-            result = requests.post('%sspinup' % server, json.dumps(request), headers={'Content-Type': 'application/json'})
+            result = requests.post('%sspinup' % server, json.dumps(request), headers={'Content-Type': 'application/json'}, timeout=5)
             if result.ok:
                 response = result.json()
                 if response['success']:
@@ -73,7 +73,7 @@ def _spin_up_server(request):
                         'npm_error': response.get('npm_error', None)
                     }
 
-        except (requests.RequestException, ValueError):
+        except (requests.RequestException, requests.Timeout, ValueError):
             import traceback
             traceback.print_exc()
         logger.warning("Server %s failed; trying another.", server)

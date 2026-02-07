@@ -335,8 +335,19 @@ def launch():
         abort(503)
     
     platform = request.form.get('platform', 'basalt')
-    version = request.form.get('version', '4.9.77')
+    version = request.form.get('version', '4')
     token = request.form.get('token', str(uuid4()))
+    
+    # Map major version to full SDK version (we only have 4.9.77)
+    SDK_VERSION_MAP = {
+        '2': '4.9.77',  # SDK 2 projects use latest SDK for emulation
+        '3': '4.9.77',  # SDK 3 projects use latest SDK for emulation  
+        '3.0': '4.9.77',
+        '4': '4.9.77',
+        '4.9.77': '4.9.77',
+    }
+    version = SDK_VERSION_MAP.get(version, '4.9.77')
+    logger.info(f"Launching emulator: platform={platform}, sdk_version={version}")
     
     if platform not in PebbleEmulator.PLATFORM_MACHINES:
         abort(400, f"Invalid platform: {platform}")

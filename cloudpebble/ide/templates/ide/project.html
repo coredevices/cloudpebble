@@ -118,7 +118,7 @@
                 <span class="katharine-at">Katharine @</span>
                 <a href="http://pbldev.io" target="_blank"><img src="{% static 'root/images/pebble.png' %}"></a>
             </div>
-            <div class="prepare-autocomplete katharine-at">{% trans 'Preparing autocomplete…' %}</div>
+            <div class="prepare-autocomplete katharine-at" style="display: none;">{% trans 'Preparing autocomplete…' %}</div>
         </div>
         <form action="/i18n/setlang/" method="post" id="lang-select-form" class="lang-select project-page">
             {% csrf_token %}
@@ -626,16 +626,18 @@ var REGEXES = _.mapObject(JSON.parse('{{regexes_json|escapejs}}'), function(v) {
 
 <script type="text/javascript">
 // Because there's apparently no good way to get these urls into javascript...
-var URL_VNC_INCLUDES = ["{% static 'noVNC/include/base64.js' %}",
-                        "{% static 'noVNC/include/websock.js' %}",
-                        "{% static 'noVNC/include/des.js' %}",
-                        "{% static 'noVNC/include/keysymdef.js' %}",
-                        "{% static 'noVNC/include/keyboard.js' %}",
-                        "{% static 'noVNC/include/input.js' %}",
-                        "{% static 'noVNC/include/display.js' %}",
-                        "{% static 'noVNC/include/jsunzip.js' %}",
-                        "{% static 'ide/external/vnc/rfb.js' %}",
-                        "{% static 'noVNC/include/keysym.js' %}"];
+var URL_VNC_INCLUDES = ["{% static 'noVNC/include/util.js' %}?v=7",
+                        "{% static 'noVNC/include/base64.js' %}?v=2",
+                        "{% static 'noVNC/include/websock.js' %}?v=2",
+                        "{% static 'noVNC/include/des.js' %}?v=2",
+                        "{% static 'noVNC/include/keysymdef.js' %}?v=2",
+                        "{% static 'noVNC/include/keyboard.js' %}?v=2",
+                        "{% static 'noVNC/include/input.js' %}?v=2",
+                        "{% static 'noVNC/include/display.js' %}?v=2",
+                        "{% static 'noVNC/include/inflator.js' %}?v=2",
+                        "{% static 'noVNC/include/jsunzip.js' %}?v=2",
+                        "{% static 'ide/external/vnc/rfb.js' %}?v=2",
+                        "{% static 'noVNC/include/keysym.js' %}?v=2"];
 var URL_BOOT_IMG = {
     aplite: {url: "{% static 'ide/img/boot-aplite.png' %}", size: [144, 168]},
     basalt: {url: "{% static 'ide/img/boot-basalt.png' %}", size: [144, 168]},

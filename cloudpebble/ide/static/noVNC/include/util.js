@@ -12,6 +12,21 @@
 // Globals defined here
 var Util = {};
 
+// Early definition to avoid race condition with async script loading
+Util._cursor_uris_supported = null;
+Util.browserSupportsCursorURIs = function () {
+    "use strict";
+    if (Util._cursor_uris_supported === null) {
+        try {
+            var target = document.createElement('canvas');
+            target.style.cursor = 'url("data:image/x-icon;base64,AAACAAEACAgAAAIAAgA4AQAAFgAAACgAAAAIAAAAEAAAAAEAIAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAD/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////AAAAAAAAAAAAAAAAAAAAAA==") 2 2, default';
+            Util._cursor_uris_supported = !!target.style.cursor;
+        } catch (e) {
+            Util._cursor_uris_supported = false;
+        }
+    }
+    return Util._cursor_uris_supported;
+};
 
 /*
  * Make arrays quack

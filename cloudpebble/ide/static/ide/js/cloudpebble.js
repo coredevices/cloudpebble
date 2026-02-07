@@ -78,7 +78,7 @@ CloudPebble.Init = function() {
             CloudPebble.Resources.Add(value);
         });
         CloudPebble.Emulator.init();
-        CloudPebble.YCM.initialise();
+        // CloudPebble.YCM.initialise(); // TODO: Enable when ycmd-proxy is ported to Python 3
         CloudPebble.Sidebar.SetProjectType(data.type);
         CloudPebble.Ready = true;
 

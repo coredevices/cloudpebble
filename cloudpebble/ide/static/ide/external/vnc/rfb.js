@@ -424,7 +424,9 @@ var RFB;
                     }
                 }
 
-                this._sock.close();
+                if (this._sock) {
+                    this._sock.close();
+                }
             }
 
             if (oldstate === 'fatal') {
