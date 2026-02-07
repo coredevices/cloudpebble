@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import styles from './ProjectList.module.css';
+import './ProjectList.css';
 
 interface Project {
   id: number;
@@ -20,15 +20,7 @@ interface Props {
   user: User;
 }
 
-// Build states from Django
-const BUILD_STATES = {
-  WAITING: 0,
-  RUNNING: 1,
-  SUCCEEDED: 2,
-  FAILED: 3,
-};
-
-function formatDate(date: Date | string): string {
+function formatDate(date: string): string {
   const d = new Date(date);
   return d.toLocaleDateString('en-GB', {
     day: 'numeric',
@@ -37,17 +29,6 @@ function formatDate(date: Date | string): string {
     hour: '2-digit',
     minute: '2-digit',
   }).replace(',', ' –');
-}
-
-function getBuildLabel(state: number): { text: string; className: string } {
-  switch (state) {
-    case BUILD_STATES.SUCCEEDED:
-      return { text: 'Successful', className: styles.labelSuccess };
-    case BUILD_STATES.FAILED:
-      return { text: 'Failed', className: styles.labelError };
-    default:
-      return { text: 'Pending', className: styles.labelInfo };
-  }
 }
 
 export default function ProjectList({ projects, user }: Props) {
@@ -84,7 +65,7 @@ export default function ProjectList({ projects, user }: Props) {
       const data = await res.json();
 
       if (res.ok) {
-        router.push(`/ide/project/${data.id}`);
+        router.push(`/ide/project/${data.project.id}`);
       } else {
         setError(data.error || 'Failed to create project');
       }
@@ -96,85 +77,101 @@ export default function ProjectList({ projects, user }: Props) {
   };
 
   return (
-    <div className={styles.container}>
-      {/* Header */}
-      <div className={styles.header}>
-        <h1 className={styles.logo}>
-          <span className={styles.logoCloud}>Cloud</span>
-          <span className={styles.logoPebble}>Pebble</span>
-        </h1>
-        <ul className={styles.navPills}>
-          <li><a className={`${styles.btn} ${styles.active}`}>Projects</a></li>
-          <li><a href="/ide/settings" className={styles.btn}>Settings</a></li>
-          <li><button onClick={handleLogout} className={styles.btn}>Sign out</button></li>
-        </ul>
-      </div>
-
-      {/* Content */}
-      <div className={styles.content}>
-        <div className={styles.projectListHeader}>
-          <h2 className={styles.sectionHeading}>All your projects</h2>
-          <p className={styles.buttons}>
-            <button 
-              className={`${styles.btn} ${styles.btnPrimary}`}
-              onClick={() => setShowCreateModal(true)}
-            >
-              Create
-            </button>
-            <button 
-              className={styles.btn}
-              onClick={() => setShowImportModal(true)}
-            >
-              Import
-            </button>
-          </p>
+    <>
+      <div className="main-container">
+        {/* Header */}
+        <div className="header">
+          <div className="container">
+            <h1 className="cloudpebble-logo">
+              <span className="cloudpebble-logo-cloud">CLOUD</span>
+              <span className="cloudpebble-logo-pebble">PEBBLE</span>
+            </h1>
+            <ul className="nav-pills header-right">
+              <li><a className="btn active">PROJECTS</a></li>
+              <li><a href="/ide/settings" className="btn">SETTINGS</a></li>
+              <li><button onClick={handleLogout} className="btn">SIGN OUT</button></li>
+            </ul>
+          </div>
         </div>
 
-        {projects.length > 0 ? (
-          <div className={styles.well}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th style={{ minWidth: 180 }}>Project</th>
-                  <th>Last modified</th>
-                  <th>Last built</th>
-                </tr>
-              </thead>
-              <tbody>
-                {projects.map((project) => (
-                  <tr key={project.id}>
-                    <td className={styles.projectName}>
-                      <a href={`/ide/project/${project.id}`}>{project.name}</a>
-                    </td>
-                    <td className={styles.projectLastModified}>
-                      {formatDate(project.updated_at)}
-                    </td>
-                    <td className={styles.projectLastBuild}>
-                      <span className={styles.muted}>Never</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Content */}
+        <div className="narrow-container container">
+          <div className="project-list-header">
+            <h2 className="section-heading">ALL YOUR PROJECTS</h2>
+            <p className="buttons">
+              <button 
+                className="btn btn-primary"
+                onClick={() => setShowCreateModal(true)}
+              >
+                CREATE
+              </button>
+              <button 
+                className="btn"
+                onClick={() => setShowImportModal(true)}
+              >
+                IMPORT
+              </button>
+            </p>
           </div>
-        ) : (
-          <p>You don&apos;t have any projects yet.</p>
-        )}
+
+          {projects.length > 0 ? (
+            <div className="well">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th style={{ minWidth: 180 }}>Project</th>
+                    <th>Last modified</th>
+                    <th>Last built</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {projects.map((project) => (
+                    <tr key={project.id}>
+                      <td className="project-name">
+                        <a href={`/ide/project/${project.id}`}>{project.name}</a>
+                      </td>
+                      <td className="project-last-modified">
+                        {formatDate(project.updated_at)}
+                      </td>
+                      <td className="project-last-build">
+                        <span className="muted">Never</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p>You don&apos;t have any projects yet.</p>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="footer">
+          <div className="container">
+            <p className="small-print">
+              CloudPebble was created by Katharine Berry and is now run by Pebble.<br/>
+              Questions? Email us at <a href="mailto:cloudpebble@getpebble.com">cloudpebble@getpebble.com</a>. 
+              See our <a href="https://getpebble.com/legal/cookies/">cookie</a> and <a href="https://getpebble.com/legal/privacy/">privacy</a> policies.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Create Project Modal */}
       {showCreateModal && (
-        <div className={styles.modalBackdrop} onClick={() => setShowCreateModal(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h3>Create New Project</h3>
+        <>
+          <div className="modal-backdrop in" onClick={() => setShowCreateModal(false)} />
+          <div className="modal fade in">
+            <div className="modal-header">
+              <h3>CREATE NEW PROJECT</h3>
             </div>
-            <div className={styles.modalBody}>
-              {error && <div className={styles.alertError}>{error}</div>}
-              <form className={styles.formHorizontal} onSubmit={handleCreateProject}>
-                <div className={styles.controlGroup}>
-                  <label className={styles.controlLabel}>Project name</label>
-                  <div className={styles.controls}>
+            <div className="modal-body">
+              {error && <div className="alert alert-error">{error}</div>}
+              <form className="form-horizontal">
+                <div className="control-group">
+                  <label className="control-label">PROJECT NAME</label>
+                  <div className="controls">
                     <input
                       type="text"
                       value={newProjectName}
@@ -184,9 +181,9 @@ export default function ProjectList({ projects, user }: Props) {
                     />
                   </div>
                 </div>
-                <div className={styles.controlGroup}>
-                  <label className={styles.controlLabel}>Project type</label>
-                  <div className={styles.controls}>
+                <div className="control-group">
+                  <label className="control-label">PROJECT TYPE</label>
+                  <div className="controls">
                     <select value={projectType} onChange={(e) => setProjectType(e.target.value)}>
                       <option value="native">Pebble C SDK</option>
                       <option value="package">Pebble Package</option>
@@ -195,9 +192,9 @@ export default function ProjectList({ projects, user }: Props) {
                     </select>
                   </div>
                 </div>
-                <div className={styles.controlGroup}>
-                  <label className={styles.controlLabel}>SDK Version</label>
-                  <div className={styles.controls}>
+                <div className="control-group">
+                  <label className="control-label">SDK VERSION</label>
+                  <div className="controls">
                     <select value={sdkVersion} onChange={(e) => setSdkVersion(e.target.value)}>
                       <option value="2">SDK 2</option>
                       <option value="3">SDK 4</option>
@@ -206,46 +203,47 @@ export default function ProjectList({ projects, user }: Props) {
                 </div>
               </form>
             </div>
-            <div className={styles.modalFooter}>
+            <div className="modal-footer">
               <button 
-                className={`${styles.btn} ${styles.btnPrimary}`}
+                className="btn btn-primary"
                 onClick={handleCreateProject}
                 disabled={creating}
               >
-                {creating ? 'Creating...' : 'Create'}
+                {creating ? 'CREATING...' : 'CREATE'}
               </button>
               <button 
-                className={styles.btn}
+                className="btn"
                 onClick={() => setShowCreateModal(false)}
               >
-                Cancel
+                CANCEL
               </button>
             </div>
           </div>
-        </div>
+        </>
       )}
 
-      {/* Import Modal (shimmed for now) */}
+      {/* Import Modal */}
       {showImportModal && (
-        <div className={styles.modalBackdrop} onClick={() => setShowImportModal(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h3>Import Existing Project</h3>
+        <>
+          <div className="modal-backdrop in" onClick={() => setShowImportModal(false)} />
+          <div className="modal fade in">
+            <div className="modal-header">
+              <h3>IMPORT EXISTING PROJECT</h3>
             </div>
-            <div className={styles.modalBody}>
+            <div className="modal-body">
               <p>Import functionality coming soon.</p>
             </div>
-            <div className={styles.modalFooter}>
+            <div className="modal-footer">
               <button 
-                className={styles.btn}
+                className="btn"
                 onClick={() => setShowImportModal(false)}
               >
-                Close
+                CLOSE
               </button>
             </div>
           </div>
-        </div>
+        </>
       )}
-    </div>
+    </>
   );
 }
