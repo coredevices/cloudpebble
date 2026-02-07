@@ -17,7 +17,7 @@ Source: `cloudpebble/auth/templates/registration/`
 
 | Page | Template | Route | Status |
 |------|----------|-------|--------|
-| Login | `login.html` | `/accounts/login` | 🔄 In Progress |
+| Login | `login.html` | `/accounts/login` | ✅ Done |
 | Registration | `registration_form.html` | `/accounts/register` | ⬜ Not Started |
 | Password Reset | `password_reset_form.html` | `/accounts/password/reset` | ⬜ Not Started |
 | Password Reset Done | `password_reset_done.html` | `/accounts/password/reset/done` | ⬜ Not Started |
