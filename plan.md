@@ -28,8 +28,9 @@ Replace Django web frontend with Next.js on Vercel while keeping backend service
 - **YCMD**: `wss://obelisk-sweet.exe.xyz/ycmd/...`
 
 ## Deployments
-- **Vercel Preview**: cloudpebble-qds98t4ei-core-devices.vercel.app
+- **Vercel Production**: cloudpebble-peach.vercel.app
 - **GitHub**: github.com/coredevices/cloudpebble (web-next folder)
+- **Feature Branch**: ui-updates
 
 ## Phase 1: Core Infrastructure ✅
 - [x] Create Next.js app in `/web-next/`
@@ -43,10 +44,11 @@ Replace Django web frontend with Next.js on Vercel while keeping backend service
 - [x] Session management with cloudpebble_sessions table
 - [x] Logout functionality
 
-## Phase 3: Project List & Management 🔄 IN PROGRESS
-- [x] Projects list page (`/ide/`) - UI updated
-- [x] Create project modal
-- [ ] UI pixel-perfect match with Django version
+## Phase 3: Project List & Management ✅
+- [x] Projects list page (`/ide/`) 
+- [x] Create project modal with TEMPLATE field
+- [x] UI matches Django version (login, project list, create modal)
+- [x] Footer with language selector and pebble logo
 - [ ] Delete project
 - [ ] Project settings
 
@@ -86,13 +88,18 @@ Replace Django web frontend with Next.js on Vercel while keeping backend service
 - Username: testuser
 - Password: testpass123
 
-## Current Status
+## Current Status (Feb 7, 2026)
 - Login page UI matches Django original ✅
-- Project list page UI updated to match ✅
+- Project list page UI matches Django ✅  
+- Create modal has all fields (name, type, SDK, template) ✅
+- Footer updated with language selector and pebble logo ✅
 - Auth works with Supabase ✅
 - Deployed to Vercel ✅
 
+### Git Branch
+Changes on `ui-updates` branch, pushed to coredevices/cloudpebble remote.
+
 ### Next Steps
-1. Test full login flow in browser
-2. Ensure pixel-perfect UI match
-3. Build project detail page with editor
+1. Merge ui-updates to main (or wait for preview deploy)
+2. Build IDE editor page with CodeMirror
+3. Add file CRUD operations
