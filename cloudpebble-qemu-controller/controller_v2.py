@@ -74,6 +74,7 @@ class PebbleEmulator:
         self.qemu_serial_port = None
         self.ws_port = None  # pypkjs WebSocket port for phone connection
         self.vnc_display = None
+        self.vnc_ws_port = None  # QEMU's built-in VNC websocket port
         self.spi_image_path = None
         self.last_ping = time.time()
         
@@ -133,6 +134,7 @@ class PebbleEmulator:
         self.qemu_serial_port = self._choose_port()
         self.ws_port = self._choose_port()
         self.vnc_display = get_free_vnc_display()
+        self.vnc_ws_port = self._choose_port()  # For QEMU's built-in websocket VNC
         
         # Create SPI image
         self._create_spi_image()
@@ -146,10 +148,14 @@ class PebbleEmulator:
         # Spawn pypkjs
         self._spawn_pypkjs()
         
+        # Spawn websockify for VNC websocket access
+        self._spawn_websockify()
+        
         return {
             'ws_port': self.ws_port,
             'vnc_display': self.vnc_display,
             'vnc_port': self.vnc_port,
+            'vnc_ws_port': self.vnc_ws_port,
         }
     
     def _spawn_qemu(self):
@@ -257,6 +263,24 @@ class PebbleEmulator:
         self.pypkjs_pid = self.pypkjs_proc.pid
         self.persist_dir = persist_dir
     
+    def _spawn_websockify(self):
+        """Spawn websockify to provide WebSocket VNC access"""
+        command = [
+            '/usr/local/bin/python', '-m', 'websockify',
+            '--heartbeat=30',
+            str(self.vnc_ws_port),
+            f'localhost:{self.vnc_port}'
+        ]
+        
+        logger.info(f"Starting websockify: {' '.join(command)}")
+        
+        self.websockify_proc = subprocess.Popen(
+            command,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        self.websockify_pid = self.websockify_proc.pid
+    
     def is_alive(self):
         """Check if emulator is still running"""
         if self.qemu_pid is None:
@@ -269,7 +293,7 @@ class PebbleEmulator:
     
     def kill(self):
         """Kill the emulator and cleanup"""
-        for proc_attr in ['qemu_proc', 'pypkjs_proc']:
+        for proc_attr in ['qemu_proc', 'pypkjs_proc', 'websockify_proc']:
             proc = getattr(self, proc_attr, None)
             if proc:
                 try:
@@ -328,7 +352,7 @@ def launch():
         return jsonify(
             uuid=str(emu_uuid),
             ws_port=result['ws_port'],
-            vnc_ws_port=result['vnc_port'],  # Not used, we proxy through API
+            vnc_ws_port=result['vnc_ws_port'],  # QEMU's built-in websocket VNC port
             vnc_display=result['vnc_display']
         )
     except Exception as e:
@@ -380,7 +404,7 @@ def kill(emu_id):
 
 @sock.route('/qemu/<emu_id>/ws/vnc')
 def vnc_proxy(ws, emu_id):
-    """WebSocket VNC proxy"""
+    """WebSocket VNC proxy - connects to websockify which proxies to QEMU VNC"""
     try:
         emu_uuid = UUID(emu_id)
     except ValueError:
@@ -393,69 +417,74 @@ def vnc_proxy(ws, emu_id):
         return
     
     emu = emulators[emu_uuid]
-    vnc_port = emu.vnc_port
+    vnc_ws_port = emu.vnc_ws_port
     
-    if not vnc_port:
-        logger.warning(f"VNC proxy: no VNC port for {emu_id}")
+    if not vnc_ws_port:
+        logger.warning(f"VNC proxy: no VNC websocket port for {emu_id}")
         ws.close()
         return
     
-    logger.info(f"VNC proxy: connecting {emu_id} to localhost:{vnc_port}")
+    logger.info(f"VNC proxy: connecting {emu_id} to ws://localhost:{vnc_ws_port}")
     
+    # Connect to websockify which proxies VNC
+    import websocket as ws_client
     try:
-        vnc_sock = socket.create_connection(('localhost', vnc_port), timeout=5)
-        vnc_sock.setblocking(False)
+        target_ws = ws_client.create_connection(
+            f'ws://localhost:{vnc_ws_port}/',
+            subprotocols=['binary'],
+            timeout=5
+        )
     except Exception as e:
-        logger.error(f"VNC proxy: failed to connect to VNC: {e}")
+        logger.error(f"VNC proxy: failed to connect to QEMU websocket: {e}")
         ws.close()
         return
     
-    # Proxy data between WebSocket and VNC socket
+    # Proxy data between browser WebSocket and QEMU WebSocket
     import select
+    alive = [True]
     
-    def recv_ws():
-        """Thread to receive from WebSocket and send to VNC"""
+    def recv_browser():
+        """Thread to receive from browser and send to QEMU"""
         try:
-            while True:
+            while alive[0]:
                 data = ws.receive()
                 if data is None:
                     break
                 if isinstance(data, str):
                     data = data.encode('latin-1')
-                vnc_sock.sendall(data)
-        except Exception as e:
-            logger.debug(f"VNC WS recv error: {e}")
+                target_ws.send_binary(data)
+            logger.debug(f"VNC browser recv error: {e}")
         finally:
-            try:
-                vnc_sock.close()
-            except:
-                pass
+            alive[0] = False
     
-    ws_thread = threading.Thread(target=recv_ws, daemon=True)
-    ws_thread.start()
+    def recv_qemu():
+        """Thread to receive from QEMU and send to browser"""
+        try:
+            while alive[0]:
+                data = target_ws.recv()
+                if not data:
+                    break
+                ws.send(data)
+        except Exception as e:
+            logger.debug(f"VNC QEMU recv error: {e}")
+        finally:
+            alive[0] = False
+    
+    browser_thread = threading.Thread(target=recv_browser, daemon=True)
+    qemu_thread = threading.Thread(target=recv_qemu, daemon=True)
+    
+    browser_thread.start()
+    qemu_thread.start()
+    
+    # Wait for either thread to finish
+    browser_thread.join()
+    qemu_thread.join()
     
     try:
-        while True:
-            readable, _, _ = select.select([vnc_sock], [], [], 1.0)
-            if readable:
-                try:
-                    data = vnc_sock.recv(65536)
-                    if not data:
-                        break
-                    ws.send(data)
-                except BlockingIOError:
-                    continue
-                except Exception as e:
-                    logger.debug(f"VNC recv error: {e}")
-                    break
-    except Exception as e:
-        logger.debug(f"VNC proxy error: {e}")
-    finally:
-        try:
-            vnc_sock.close()
-        except:
-            pass
-        logger.info(f"VNC proxy: closed for {emu_id}")
+        target_ws.close()
+    except:
+        pass
+    logger.info(f"VNC proxy: closed for {emu_id}")
 
 
 @sock.route('/qemu/<emu_id>/ws/phone')

@@ -30,7 +30,7 @@ RUN uv tool install pebble-tool
 ENV PATH="/root/.local/share/uv/tools/pebble-tool/bin:/root/.local/bin:$PATH"
 
 # Install Flask and dependencies for the controller
-RUN pip install --no-cache-dir flask flask-cors flask-sock simple-websocket websockify
+RUN pip install --no-cache-dir flask flask-cors flask-sock simple-websocket websocket-client websockify
 
 # SDK will be installed at first run or mounted from host
 # Create directory for SDK persistence
