@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import '../common.css';
 import './project-list.css';
 
 interface Project {

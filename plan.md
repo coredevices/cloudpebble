@@ -31,7 +31,7 @@ Source: `cloudpebble/ide/templates/ide/`
 | Page | Template | Route | Status |
 |------|----------|-------|--------|
 | Project List | `index.html` | `/ide/` | ✅ Done |
-| Project/IDE | `project.html` | `/ide/project/[id]` | 🔄 In Progress |
+| Project/IDE | `project.html` | `/ide/project/[id]` | ✅ Basic Done |
 | User Settings | `settings.html` | `/ide/settings` | ⬜ Not Started |
 | QEMU Config | `qemu-config.html` | `/ide/emulator/config` | ⬜ Not Started |
 | QEMU Sensors | `qemu-sensors.html` | `/ide/emulator/sensors` | ⬜ Not Started |
@@ -77,10 +77,11 @@ Source: `cloudpebble/ide/templates/ide/project/`
 ### Source Files
 | Endpoint | Method | Django View | Status |
 |----------|--------|-------------|--------|
-| `/api/projects/[id]/source` | POST | `create_source_file` | ⬜ Not Started |
-| `/api/projects/[id]/source/[fid]` | GET | `load_source_file` | ⬜ Not Started |
-| `/api/projects/[id]/source/[fid]` | PUT | `save_source_file` | ⬜ Not Started |
-| `/api/projects/[id]/source/[fid]` | DELETE | `delete_source_file` | ⬜ Not Started |
+| `/api/projects/[id]/info` | GET | `project_info` | ✅ Done |
+| `/api/projects/[id]/source` | POST | `create_source_file` | ✅ Done |
+| `/api/projects/[id]/source/[fid]` | GET | `load_source_file` | ✅ Done |
+| `/api/projects/[id]/source/[fid]` | POST | `save_source_file` | ✅ Done |
+| `/api/projects/[id]/source/[fid]` | DELETE | `delete_source_file` | ✅ Done |
 | `/api/projects/[id]/source/[fid]/rename` | POST | `rename_source_file` | ⬜ Not Started |
 | `/api/projects/[id]/source/[fid]/is_safe` | GET | `source_file_is_safe` | ⬜ Not Started |
 
@@ -156,7 +157,7 @@ Source: `cloudpebble/ide/templates/ide/project/`
 
 | Modal | Purpose | Status |
 |-------|---------|--------|
-| Create File | New source file dialog | ⬜ Not Started |
+| Create File | New source file dialog | ✅ Done |
 | GitHub New Repo | Create new GitHub repo | ⬜ Not Started |
 | GitHub Commit | Push commit dialog | ⬜ Not Started |
 | GitHub Pull | Pull from GitHub | ⬜ Not Started |
@@ -192,9 +193,9 @@ Source: `cloudpebble/ide/templates/ide/project/`
 
 | File | Purpose | Status |
 |------|---------|--------|
-| `ide/js/cloudpebble.js` | Main app initialization | ⬜ Not Started |
-| `ide/js/sidebar.js` | Sidebar management | ⬜ Not Started |
-| `ide/js/editor.js` | Code editor | ⬜ Not Started |
+| `ide/js/cloudpebble.js` | Main app initialization | 🔄 Partial (in IDEClient.tsx) |
+| `ide/js/sidebar.js` | Sidebar management | 🔄 Partial (in IDEClient.tsx) |
+| `ide/js/editor.js` | Code editor | ✅ Done (CodeMirror in IDEClient.tsx) |
 | `ide/js/compile.js` | Compilation UI | ⬜ Not Started |
 | `ide/js/resources.js` | Resource management | ⬜ Not Started |
 | `ide/js/settings.js` | Project settings | ⬜ Not Started |
@@ -215,7 +216,7 @@ Source: `cloudpebble/ide/templates/ide/project/`
 
 | Library | Purpose | Status |
 |---------|---------|--------|
-| CodeMirror | Code editor | ⬜ Not Started |
+| CodeMirror | Code editor | ✅ Done |
 | noVNC | Emulator display | ⬜ Not Started |
 | jQuery | DOM manipulation | ⬜ Not Needed (React) |
 | Backbone | MV* framework | ⬜ Not Needed (React) |
@@ -234,22 +235,27 @@ Source: `cloudpebble/ide/templates/ide/project/`
 3. Login API with Django PBKDF2 verification
 4. Session management
 5. Basic project list display
+6. Login page - HTML copied from Django
+7. Project list page - HTML copied from Django
+8. common.css and project-list.css copied
+9. IDE project page basic layout
+10. Source file listing in sidebar
+11. CodeMirror editor integration
+12. File CRUD APIs (create, read, save, delete)
+13. New file modal
+14. Database schema complete (004_complete_schema.sql)
 
 ### 🔄 In Progress
-1. Login page - needs HTML to match exactly
-2. Project list page - needs HTML to match exactly
-3. Create project modal - needs all fields
+1. IDE needs more exact HTML matching to Django
+2. Settings pane needs implementation
+3. Compile pane needs implementation
 
 ### ⬜ Next Steps (Priority Order)
-1. **Copy exact HTML** from Django login.html → Next.js
-2. **Copy exact HTML** from Django index.html (project list) → Next.js
-3. **Copy common.css** completely
-4. Verify HTML output matches Django using browser dev tools
-5. Build project detail page (IDE)
-6. Add CodeMirror editor
-7. Implement file CRUD
-8. Add build functionality
-9. Add emulator (noVNC)
+1. Copy exact pane HTML from Django templates (settings.html, compile.html, etc.)
+2. Add build triggering via Redis/Celery
+3. Add emulator (noVNC WebSocket to exe.dev)
+4. Implement resources (upload/display)
+5. GitHub integration (shimmed)
 
 ---
 
