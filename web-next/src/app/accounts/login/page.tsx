@@ -2,7 +2,6 @@
 
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import './login.css';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -39,20 +38,33 @@ export default function LoginPage() {
 
   return (
     <div className="main-container">
+      {/* Custom container - from Django inline style */}
+      <style>{`
+        .container-narrow {
+          margin: 0 auto;
+          max-width: 500px;
+        }
+      `}</style>
       <div className="container-narrow">
         <div className="masthead">
-          <h3 className="muted"><a href="/">CLOUDPEBBLE</a></h3>
+          <ul className="nav nav-pills pull-right">
+            {/* Top right pills - empty in Django */}
+          </ul>
+          <h3 className="muted"><a href="/" className="muted">CloudPebble</a></h3>
         </div>
         <div className="row-fluid">
           <div className="span12 well">
             {error && (
               <div className="alert alert-error">{error}</div>
             )}
-            <form className="form-horizontal" onSubmit={handleSubmit}>
+            <form className="form-horizontal" onSubmit={handleSubmit} style={{ marginBottom: 0 }}>
               <div className="control-group">
-                <label className="control-label">USERNAME:</label>
+                <label className="control-label"><label htmlFor="id_username">Username:</label></label>
                 <div className="controls">
-                  <input
+                  <input 
+                    id="id_username" 
+                    maxLength={254} 
+                    name="username" 
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
@@ -62,9 +74,11 @@ export default function LoginPage() {
                 </div>
               </div>
               <div className="control-group">
-                <label className="control-label">PASSWORD:</label>
+                <label className="control-label"><label htmlFor="id_password">Password:</label></label>
                 <div className="controls">
-                  <input
+                  <input 
+                    id="id_password" 
+                    name="password" 
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -72,13 +86,13 @@ export default function LoginPage() {
                   />
                 </div>
               </div>
-              <div className="form-actions">
+              <div className="form-actions" style={{ marginBottom: 0, paddingBottom: 0 }}>
                 <p>
                   <button className="btn btn-primary" type="submit" disabled={loading}>
-                    {loading ? 'LOGGING IN...' : 'LOG IN'}
+                    {loading ? 'Logging in...' : 'Log in'}
                   </button>
                 </p>
-                <p>
+                <p style={{ marginBottom: 0 }}>
                   <a href="/accounts/password/reset/">Forgotten password?</a>
                 </p>
               </div>

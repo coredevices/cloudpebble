@@ -1,12 +1,13 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
-import ProjectList from '@/components/ProjectList';
+import ProjectListClient from './ProjectListClient';
 
 interface Project {
   id: number;
   name: string;
   updated_at: string;
+  last_build?: string | null;
 }
 
 async function getProjects(userId: number): Promise<Project[]> {
@@ -33,5 +34,5 @@ export default async function IDEPage() {
 
   const projects = await getProjects(user.id);
 
-  return <ProjectList projects={projects} user={user} />;
+  return <ProjectListClient projects={projects} />;
 }
