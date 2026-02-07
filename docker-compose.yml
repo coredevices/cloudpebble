@@ -51,7 +51,18 @@ services:
       - AWS_S3_FAKE_S3=s3:4569
 
   qemu:
-    build: cloudpebble-qemu-controller/
+    build:
+      context: cloudpebble-qemu-controller/
+      dockerfile: Dockerfile.py3
+    ports:
+      - "8001:8001"   # API
+      - "6080:6080"   # VNC websocket
+    environment:
+      - PORT=8001
+      - LAUNCH_AUTH_HEADER=secret
+      - EMULATOR_LIMIT=5
+    volumes:
+      - pebble-sdk:/root/.pebble-sdk  # Persist SDK between restarts
     profiles:
       - emulator
 
@@ -72,3 +83,6 @@ services:
     image: kuracloud/fake-s3
     ports:
       - "8003:4569"
+
+volumes:
+  pebble-sdk:  # Persists pebble SDK between container restarts
