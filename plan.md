@@ -9,38 +9,44 @@ Replace Django web frontend with Next.js on Vercel while keeping backend service
 │   Browser   │─────▶│  Next.js on Vercel   │  (UI, API routes)
 └──────┬──────┘      └──────────┬───────────┘
        │                        │
-       │ WebSocket              │ HTTP
-       │ (VNC, YCMD)            │ (PostgreSQL, Redis, S3)
+       │ WebSocket              │ Supabase
+       │ (VNC, YCMD)            │ (PostgreSQL)
        ▼                        ▼
 ┌──────────────────────────────────────────┐
 │           exe.dev services               │
-│  nginx → QEMU, YCMD, Celery, DB, S3      │
+│  nginx → QEMU, YCMD, Celery, S3          │
 └──────────────────────────────────────────┘
 ```
 
+## Database
+- **Supabase**: https://hagijgvetkokhprpsnka.supabase.co
+- Tables: cloudpebble_users, cloudpebble_sessions, cloudpebble_projects
+
 ## Backend Services (exe.dev)
-- **PostgreSQL**: `obelisk-sweet.exe.xyz:5432` (user: postgres, db: postgres)
-- **Redis**: `obelisk-sweet.exe.xyz:6379`
 - **S3**: `obelisk-sweet.exe.xyz:8003`
 - **QEMU**: `wss://obelisk-sweet.exe.xyz/qemu/...`
 - **YCMD**: `wss://obelisk-sweet.exe.xyz/ycmd/...`
 
-## Phase 1: Core Infrastructure
-- [x] Expose PostgreSQL, Redis, S3 ports in docker-compose
-- [x] Push docker-compose changes
+## Deployments
+- **Vercel Preview**: cloudpebble-qds98t4ei-core-devices.vercel.app
+- **GitHub**: github.com/coredevices/cloudpebble (web-next folder)
+
+## Phase 1: Core Infrastructure ✅
 - [x] Create Next.js app in `/web-next/`
-- [x] Set up database connection (direct pg)
-- [x] Set up S3 client (aws-sdk with custom endpoint)
-- [x] Set up Redis client
+- [x] Set up Supabase client
+- [x] Migration scripts in `/web-next/migrations/`
+- [x] Deploy to Vercel
 
-## Phase 2: Authentication
-- [x] Login page (replicate existing UI exactly)
-- [x] Session management (use existing user: testuser/testpass123)
-- [ ] Auth middleware for protected routes
+## Phase 2: Authentication ✅
+- [x] Login page (UI matches Django original)
+- [x] Django PBKDF2 password verification
+- [x] Session management with cloudpebble_sessions table
+- [x] Logout functionality
 
-## Phase 3: Project List & Management
-- [x] Projects list page (`/ide/`)
+## Phase 3: Project List & Management 🔄 IN PROGRESS
+- [x] Projects list page (`/ide/`) - UI updated
 - [x] Create project modal
+- [ ] UI pixel-perfect match with Django version
 - [ ] Delete project
 - [ ] Project settings
 
@@ -56,7 +62,7 @@ Replace Django web frontend with Next.js on Vercel while keeping backend service
 - [ ] Resource identifiers
 
 ## Phase 6: Build System
-- [ ] Trigger build (via Redis/Celery)
+- [ ] Trigger build (via Redis/Celery on exe.dev)
 - [ ] Poll build status
 - [ ] Display build log
 - [ ] Download .pbw
@@ -76,33 +82,17 @@ Replace Django web frontend with Next.js on Vercel while keeping backend service
 - [ ] UI elements present but non-functional
 - [ ] Show "Coming soon" or similar
 
-## Testing Checklist
-- [ ] Login with testuser/testpass123
-- [ ] View existing projects
-- [ ] Open test project
-- [ ] Edit source file
-- [ ] Save file
-- [ ] Build project
-- [ ] View build log
-- [ ] Run in emulator
-- [ ] Install app to emulator
-- [ ] Code completion works
+## Testing Credentials
+- Username: testuser
+- Password: testpass123
 
 ## Current Status
-**Phase 2: Authentication** - COMPLETE
-**Phase 3: Project List** - IN PROGRESS
-
-### Completed
-- Next.js app created with TypeScript
-- Database connection (pg)
-- S3 client configured
-- Redis client configured
-- Login page with Django password verification
-- Session management
-- Project list page
-- Create project modal
+- Login page UI matches Django original ✅
+- Project list page UI updated to match ✅
+- Auth works with Supabase ✅
+- Deployed to Vercel ✅
 
 ### Next Steps
-- Deploy to Vercel and test database connectivity
-- Test login with testuser/testpass123
-- Build project detail page with editor
+1. Test full login flow in browser
+2. Ensure pixel-perfect UI match
+3. Build project detail page with editor
