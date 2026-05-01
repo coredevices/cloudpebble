@@ -31,7 +31,7 @@ class CloudpebbleTestCase(TestCase):
         login_result = self.client.login(username='test', password='test')
         self.user_id = next(user.id for user in User.objects.all())
         self.assertTrue(login_result)
-        create_data = {'name': 'test', 'template': 0, 'type': 'native', 'sdk': '4.9.148'}
+        create_data = {'name': 'test', 'template': 0, 'type': 'native'}
         if project_options:
             create_data.update(project_options)
         new_project = json.loads(self.client.post('/ide/project/create', create_data).content)

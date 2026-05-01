@@ -70,7 +70,6 @@ $(function() {
     $('#project-type').change(function() {
         var val = $(this).val();
         if(val == 'alloy') {
-            $('.sdk-version').hide();
             $('#project-template').val(0).hide();
             ensureAlloyTemplateSelect().show();
             $('#template-holder').show();
@@ -79,12 +78,10 @@ $(function() {
             $('#alloy-template').hide();
             $('#project-template').show();
             $('#template-holder').hide();
-            $('.sdk-version').hide();
         } else {
             $('#alloy-template').hide();
             $('#project-template').show();
             $('#template-holder').show();
-            $('.sdk-version').show();
             if ($('#project-template option[value="watchface-tutorial/part1"]').length) {
                 $('#project-template').val('watchface-tutorial/part1');
             }
@@ -102,8 +99,7 @@ $(function() {
         var post_data = {
             name: value,
             template: $('#project-template').val(),
-            type: $('#project-type').val(),
-            sdk: $('#project-sdk-version').val()
+            type: $('#project-type').val()
         };
         if($('#project-type').val() == 'alloy') {
             post_data.alloy_template = $('#alloy-template').val();
@@ -127,7 +123,6 @@ $(function() {
 
     var import_archive = function(active_set) {
         var name = active_set.find('#import-zip-name').val();
-        var sdk = active_set.find('#import-zip-sdk-version').val();
         if(name.replace(/\s/g, '') === '') {
             active_set.find('.errors').removeClass('hide').text(gettext("You must specify a project name."));
             return;
@@ -146,7 +141,6 @@ $(function() {
         disable_import_controls();
         var form_data = new FormData();
         form_data.append('name', name);
-        form_data.append('sdk', sdk);
         form_data.append('archive', file);
         active_set.find('.progress').removeClass('hide');
 
@@ -179,7 +173,6 @@ $(function() {
         var name = active_set.find('#import-github-name').val();
         var url = active_set.find('#import-github-url').val();
         var branch = active_set.find('#import-github-branch').val();
-        var sdk = active_set.find('#import-github-sdk-version').val();
         var add_remote = !!active_set.find('#import-github-add-remote').is(':checked');
         if(name.replace(/\s/g, '') === '') {
             active_set.find('.errors').removeClass('hide').text(gettext("You must specify a project name."));
@@ -199,7 +192,6 @@ $(function() {
             name: name,
             repo: url,
             branch: branch,
-            sdk: sdk,
             add_remote: add_remote
         }), active_set);
         ga('send', 'event', 'project', 'import', 'github');

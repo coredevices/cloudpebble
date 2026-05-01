@@ -428,7 +428,6 @@ def project_info(request, project_id):
         'app_jshint': project.app_jshint,
         'app_dependencies': project.get_dependencies(include_interdependencies=False),
         'interdependencies': [p.id for p in project.project_dependencies.all()],
-        'sdk_version': project.sdk_version,
         'app_platforms': project.app_platforms,
         'app_modern_multi_js': project.app_modern_multi_js,
         'menu_icon': project.menu_icon.id if project.menu_icon else None,
@@ -618,7 +617,6 @@ def create_project(request):
             c_template = template_value
     project_type = request.POST.get('type', 'native')
     template_name = None
-    sdk_version = str(request.POST.get('sdk', '4.9.148'))
     try:
         with transaction.atomic():
             app_keys = '[]'
@@ -633,7 +631,6 @@ def create_project(request):
                 app_is_watchface=False,
                 app_capabilities='',
                 project_type=project_type,
-                sdk_version=sdk_version,
                 app_keys=app_keys,
                 app_platforms='emery,gabbro' if project_type == 'alloy' else None
             )
@@ -746,11 +743,6 @@ def save_project_settings(request, project_id):
             project.app_capabilities = request.POST['app_capabilities']
             project.app_keys = request.POST['app_keys']
             project.app_jshint = False
-            sdk_version = request.POST['sdk_version']
-            valid_sdks = {x[0] for x in Project.SDK_VERSIONS}
-            if sdk_version not in valid_sdks:
-                raise BadRequest(_("Invalid SDK version."))
-            project.sdk_version = sdk_version
             app_platforms = request.POST['app_platforms']
             if app_platforms and project.has_embeddedjs_files:
                 unsupported = set(app_platforms.split(',')) - {'emery', 'gabbro', 'flint'}
@@ -959,12 +951,8 @@ def get_projects(request):
 def import_zip(request):
     zip_file = request.FILES['archive']
     name = request.POST['name']
-    sdk = request.POST.get('sdk', '4.9.148')
-    valid_sdks = {x[0] for x in Project.SDK_VERSIONS}
-    if sdk not in valid_sdks:
-        raise BadRequest(_("Invalid SDK version."))
     try:
-        project = Project.objects.create(owner=request.user, name=name, sdk_version=sdk)
+        project = Project.objects.create(owner=request.user, name=name)
     except IntegrityError as e:
         raise BadRequest(str(e))
     task = do_import_archive.delay(project.id, zip_file.read(), delete_project=True)
@@ -979,10 +967,6 @@ def import_github(request):
     name = request.POST['name']
     repo = request.POST['repo']
     branch = request.POST['branch']
-    sdk = request.POST.get('sdk', '4.9.148')
-    valid_sdks = {x[0] for x in Project.SDK_VERSIONS}
-    if sdk not in valid_sdks:
-        raise BadRequest(_("Invalid SDK version."))
     add_remote = (request.POST['add_remote'] == 'true')
     match = re.match(r'^(?:https?://|git@|git://)?(?:www\.)?github\.com[/:]([\w.-]+)/([\w.-]+?)(?:\.git|/|$)', repo)
     if match is None:
@@ -992,7 +976,7 @@ def import_github(request):
     github_project = match.group(2)
 
     try:
-        project = Project.objects.create(owner=request.user, name=name, sdk_version=sdk)
+        project = Project.objects.create(owner=request.user, name=name)
     except IntegrityError as e:
         raise BadRequest(str(e))
 

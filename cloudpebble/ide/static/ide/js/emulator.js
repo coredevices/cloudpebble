@@ -17,6 +17,12 @@ CloudPebble.Emulator = new (function() {
         popup.find('#bluetooth-enabled').change(setBluetoothState).prop('checked', self._bluetooth);
         popup.find('#24h-enabled').change(set24HState).prop('checked', self._24h);
         popup.find('#peek-showing').change(setTimelinePeek).prop('checked', self._timelinePeek);
+        popup.find('#audio-muted').change(setMutedState).prop('checked', self._muted);
+        SharedPebble.getEmulator(ConnectionType.Qemu).then(function(emulator) {
+            if (emulator && typeof emulator.hasAudio === 'function' && emulator.hasAudio()) {
+                popup.find('.emu-audio-row').show();
+            }
+        });
     }
 
     function setDefaults() {
@@ -25,6 +31,7 @@ CloudPebble.Emulator = new (function() {
         self._bluetooth = true;
         self._24h = true;
         self._timelinePeek = false;
+        self._muted = false;
     }
 
     function handleClosed() {
@@ -49,6 +56,10 @@ CloudPebble.Emulator = new (function() {
             '<div class="control-group">' +
                 '<label class="control-label" for="24h-enabled">24-hour:</label>' +
                 '<div class="controls"><input type="checkbox" id="24h-enabled" checked></div>' +
+            '</div>' +
+            '<div class="control-group emu-audio-row" style="display: none;">' +
+                '<label class="control-label" for="audio-muted">Mute audio:</label>' +
+                '<div class="controls"><input type="checkbox" id="audio-muted"></div>' +
             '</div>' +
             '<div class="control-group">' +
                 '<label class="control-label" for="peek-showing">Quick View:</label>' +
@@ -103,6 +114,15 @@ CloudPebble.Emulator = new (function() {
         self._timelinePeek = $('.emulator-config #peek-showing').prop('checked');
         SharedPebble.getPebble(ConnectionType.Qemu).then(function(pebble) {
             pebble.emu_set_peek(self._timelinePeek);
+        });
+    }
+
+    function setMutedState(e) {
+        self._muted = $('.emulator-config #audio-muted').prop('checked');
+        SharedPebble.getEmulator(ConnectionType.Qemu).then(function(emulator) {
+            if (emulator && typeof emulator.setMuted === 'function') {
+                emulator.setMuted(self._muted);
+            }
         });
     }
 

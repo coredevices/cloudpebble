@@ -44,7 +44,6 @@ def import_gist(user_id, gist_id):
         'app_keys': '[]',
         'project_type': 'native',
         'app_modern_multi_js': False,
-        'sdk_version': '4.9.148'
     }
     if len(files) == 1 or ((APPINFO_MANIFEST in files or PACKAGE_MANIFEST in files) and len(files) == 2):
         if 'simply.js' in files:
@@ -57,7 +56,6 @@ def import_gist(user_id, gist_id):
     # If all files are .js or .json and there is an index.js, assume it's a rocky project.
     if all(x.endswith(('.js', '.json')) for x in gist.files) and 'index.js' in files:
         default_settings['project_type'] = 'rocky'
-        default_settings['sdk_version'] = '4.9.148'
         default_settings['app_modern_multi_js'] = True
 
     media = []
@@ -72,7 +70,6 @@ def import_gist(user_id, gist_id):
         package['pebble'].update(content.get('pebble', {}))
         manifest_settings, media, dependencies = load_manifest_dict(package, PACKAGE_MANIFEST, default_project_type=None)
         default_settings['app_keys'] = '[]'
-        default_settings['sdk_version'] = '4.9.148'
         default_settings['app_modern_multi_js'] = True
     elif APPINFO_MANIFEST in files:
         content = json.loads(files[APPINFO_MANIFEST].content)
