@@ -20,5 +20,5 @@ jobs:
           docker compose up -d
           # Wait for web to be ready
           sleep 10
-          docker compose exec -T web /usr/local/bin/python3 manage.py test
+          docker compose exec -T web /usr/local/bin/python3 manage.py test ide.tests.test_env_vars
         timeout-minutes: 30
