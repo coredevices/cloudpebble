@@ -5,7 +5,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('ide', '0009_alter_project_project_type_alter_publishedmedia_name_and_more'),
+        ('ide', '0011_drop_sdk_version'),
     ]
 
     operations = [
