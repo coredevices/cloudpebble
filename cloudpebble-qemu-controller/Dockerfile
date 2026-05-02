@@ -1,15 +1,15 @@
 FROM debian:bullseye AS qemu-builder
 
-# Build deps for QEMU (needs Python 2 for configure)
+# Build deps for QEMU (needs Python 3 for configure)
 RUN apt-get update && apt-get install -y \
   libglib2.0-dev libpixman-1-dev libfdt-dev gnutls-dev \
-  curl git make gcc pkg-config python2 \
+  curl git make gcc pkg-config python3 \
   && rm -rf /var/lib/apt/lists/*
 
 # Build QEMU from coredevices/qemu
 RUN git clone --depth 1 https://github.com/coredevices/qemu.git /qemu && \
   cd /qemu && \
-  ./configure --python=python2 --extra-ldflags=-g --enable-debug --disable-werror \
+  ./configure --python=python3 --extra-ldflags=-g --enable-debug --disable-werror \
     --target-list="arm-softmmu" && \
   make clean && make -j$(nproc)
 
