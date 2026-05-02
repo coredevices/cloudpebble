@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y \
 # Clone and build ycmd (ycm-core fork, Python 3 compatible)
 RUN git clone https://github.com/ycm-core/ycmd.git /ycmd && \
   cd /ycmd && \
-  git reset --hard 23fe8d27 && \
+  git reset --hard 6297cad7dfffd2a117275b4fe8a867581b4ab236 && \
   git submodule update --init --recursive && \
   python3 build.py --clang-completer --force-sudo
 
