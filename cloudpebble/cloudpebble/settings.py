@@ -187,7 +187,7 @@ BOWER_INSTALLED_APPS = (
 )
 
 # Make this unique, and don't share it with anybody.
-_secret_key_path = os.path.join(os.environ.get('SECRET_KEY_FILE', '/data/secret_key.txt'))
+_secret_key_path = os.environ.get('SECRET_KEY_FILE', '/data/secret_key.txt')
 
 if _environ.get('SECRET_KEY'):
     SECRET_KEY = _environ['SECRET_KEY']
@@ -199,6 +199,7 @@ else:
     SECRET_KEY = secrets.token_urlsafe(50)
     with open(_secret_key_path, 'w') as _f:
         _f.write(SECRET_KEY)
+    os.chmod(_secret_key_path, 0o600)
 
 # List of callables that know how to import templates from various sources.
 TEMPLATE_LOADERS = (

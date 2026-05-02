@@ -16,7 +16,7 @@ docker compose up
 # Open http://localhost:8080 and register an account
 ```
 
-> **Note:** `PUBLIC_URL` tells Django how the outside world reaches the site (used for generating callback URLs, media paths, etc.). `NGINX_PORT` controls which host port nginx binds to. They must match.
+> **Note:** `PUBLIC_URL` tells Django how the outside world reaches the site (used for generating callback URLs, media paths, etc.). `NGINX_PORT` controls which host port nginx binds to. In dev, they typically match; in production behind a reverse proxy, `PUBLIC_URL` is the external URL and `NGINX_PORT` may differ.
 
 ### Test GitHub Repo Sync locally
 
@@ -93,7 +93,7 @@ QEMU_SERVER=root@<your-vm-or-qemu-host>
 QEMU_SSH_KEY=~/.ssh/id_pub
 ```
 
-- **`PUBLIC_URL`** — The public-facing URL for the instance. Used for browser-facing links. Must match the port in `NGINX_PORT`.
+- **`PUBLIC_URL`** — The public-facing URL for the instance. Used for browser-facing links.
 - **`NGINX_PORT`** — Set to `8000` to override system-level nginx.
 - **`SECRET_KEY`** — Optional. Django secret key (auto-generated and persisted to a Docker volume if not set). Generate your own with `python3 -c "import secrets; print(secrets.token_urlsafe(50))"` if you prefer.
 
@@ -274,7 +274,7 @@ Key variables set in `docker-compose.yml`:
 
 | Variable | Purpose |
 |----------|---------|
-| `PUBLIC_URL` | Public-facing URL (e.g. `http://localhost:8080`). Must match `NGINX_PORT`. |
+| `PUBLIC_URL` | Public-facing URL (e.g. `http://localhost:8080`). In dev, port should match `NGINX_PORT`; in production behind a reverse proxy, they may differ. |
 | `NGINX_PORT` | Host port nginx binds to (default: `80`) |
 | `SECRET_KEY` | Django secret key (auto-generated and persisted if not set) |
 | `EXPECT_SSL` | Set to `yes` for HTTPS deployments |
