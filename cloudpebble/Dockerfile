@@ -1,4 +1,4 @@
-FROM python:3.11-slim-bookworm
+FROM python:3.11-slim-trixie
 LABEL maintainer="CloudPebble Contributors"
 
 ENV NPM_CONFIG_LOGLEVEL=info NODE_VERSION=20.11.0 DJANGO_VERSION=4.2 NODEJS_CHECK_SIGNATURES=no
@@ -23,7 +23,6 @@ RUN apt-get update && apt-get install -y \
     git \
     libc6-dev \
     libfreetype6 \
-    libsdl1.2debian \
     libfdt1 \
     libglib2.0-0 \
   --no-install-recommends && rm -rf /var/lib/apt/lists/*
@@ -71,8 +70,8 @@ else:
 PY
 
 # Install Pebble SDK (downloads SDK + toolchain + QEMU)
-RUN pebble sdk install 4.9.148 `# cache-bust: 2026-03-31`
-RUN pebble sdk activate 4.9.148
+RUN pebble sdk install 4.9.169
+RUN pebble sdk activate 4.9.169
 
 # Set up SDK paths for CloudPebble
 ENV PEBBLE_SDK_PATH=/root/.pebble-sdk

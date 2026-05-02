@@ -12,6 +12,7 @@ import ssl
 import os
 import pwd
 import grp
+import subprocess
 import sys
 
 from gevent import pywsgi
@@ -167,6 +168,58 @@ def ws_vnc(emu):
     except Exception:
         logging.exception("ws_vnc crashed")
         return 'error', 500
+
+
+@app.route('/qemu/<emu>/ws/audio')
+def ws_audio(emu):
+    """Fallback audio path. Streams raw s16le 16kHz mono PCM frames over a
+    WebSocket — used when WebRTC ICE can't establish a direct UDP path.
+    Sources from the same per-emulator pulseaudio null-sink monitor that
+    aiortc reads from; multiple parec readers on the same monitor source
+    is supported by pulseaudio."""
+    logging.info("ws_audio called for emu=%s", emu)
+    server_ws = request.environ.get('wsgi.websocket', None)
+    if server_ws is None:
+        return "websocket endpoint", 400
+    try:
+        emulator = emulators[UUID(emu)]
+    except (ValueError, KeyError):
+        return "not found", 404
+    if emulator.platform not in ('emery', 'flint') or not emulator.audio_sink:
+        return "no audio for this platform", 400
+
+    sink = emulator.audio_sink
+    proc = None
+    try:
+        proc = subprocess.Popen([
+            'parec',
+            '--device=' + sink + '.monitor',
+            '--rate=16000',
+            '--channels=1',
+            '--format=s16le',
+            '--latency-msec=20',
+            '--raw',
+        ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        # 20ms @ 16kHz s16le mono = 640 bytes. parec may return short reads;
+        # we send whatever we get to keep latency low.
+        while True:
+            chunk = proc.stdout.read(640)
+            if not chunk:
+                break
+            try:
+                server_ws.send(chunk)
+            except (geventwebsocket.WebSocketError, OSError):
+                break
+    except Exception:
+        logging.exception("ws_audio: stream error")
+    finally:
+        if proc is not None and proc.poll() is None:
+            try:
+                proc.kill()
+            except OSError:
+                pass
+    logging.info("ws_audio: closed for emu=%s", emu)
+    return ''
 
 
 def _kill_idle_emulators():

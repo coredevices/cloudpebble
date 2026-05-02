@@ -32,11 +32,6 @@ class Project(IdeModel):
     )
     project_type = models.CharField(max_length=10, choices=PROJECT_TYPES, default='native')
 
-    SDK_VERSIONS = (
-        ('4.9.148', _('SDK 4.9.148')),
-    )
-    sdk_version = models.CharField(max_length=32, choices=SDK_VERSIONS, default='4.9.148')
-
     # New settings for 2.0
     app_uuid = models.CharField(max_length=36, blank=True, null=True, default=generate_half_uuid, validators=regexes.validator('uuid', _('Invalid UUID.')))
     app_company_name = models.CharField(max_length=100, blank=True, null=True)
@@ -82,10 +77,6 @@ class Project(IdeModel):
             self.app_keys = '[]'
         if self.project_type == 'package' and self.app_version_label == '1.0':
             self.app_version_label = '1.0.0'
-        # Fall back to latest SDK if the project's version is no longer available.
-        valid_sdks = {v[0] for v in self.SDK_VERSIONS}
-        if self.sdk_version and self.sdk_version not in valid_sdks:
-            self.sdk_version = self.SDK_VERSIONS[0][0]
 
     def set_dependencies(self, dependencies):
         """ Set the project's dependencies from a dictionary.
