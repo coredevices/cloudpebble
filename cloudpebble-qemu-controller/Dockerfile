@@ -3,7 +3,7 @@ FROM debian:bullseye AS qemu-builder
 # Build deps for QEMU (needs Python 3 for configure)
 RUN apt-get update && apt-get install -y \
   libglib2.0-dev libpixman-1-dev libfdt-dev gnutls-dev \
-  curl git make gcc pkg-config python3 python3-venv python3-pip python3-tomli \
+  curl git make gcc pkg-config python3 python3-venv python3-pip \
   && rm -rf /var/lib/apt/lists/*
 
 # Build QEMU from coredevices/qemu
