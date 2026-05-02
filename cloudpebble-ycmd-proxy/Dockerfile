@@ -1,5 +1,7 @@
 FROM python:3.11-slim-bookworm AS ycmd-builder
 
+ARG PEBBLE_SDK_VERSION
+
 # Build dependencies for ycmd with clang-completer
 RUN apt-get update && apt-get install -y \
   cmake build-essential libncurses-dev git \
@@ -36,7 +38,7 @@ RUN curl -SLO "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-
 # Pebble SDK (for include headers only – must match the version used by the
 # build system so that YCM sees headers for all supported platforms including
 # gabbro and flint).
-RUN SDK_INFO=$(curl -sf https://sdk.repebble.com/v1/files/sdk-core/4.9.169) && \
+RUN SDK_INFO=$(curl -sf https://sdk.repebble.com/v1/files/sdk-core/$PEBBLE_SDK_VERSION) && \
   SDK_URL=$(echo "$SDK_INFO" | python3 -c "import sys,json; print(json.load(sys.stdin)['url'])") && \
   curl -Lf "$SDK_URL" -o /tmp/sdk.tar.gz && \
   mkdir -p /sdk3 && \
