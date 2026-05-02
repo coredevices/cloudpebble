@@ -235,10 +235,14 @@ class TestEnvVarsInProjectAssembly(TestCase):
     def test_process_env_substituted_in_pkjs_files(self):
         self._create_source_file('index.js', 'var key = process.env.API_KEY; var host = process.env.DB_HOST;')
         EnvironmentVariable.objects.create(
-            project=self.project, key='API_KEY', encrypted_value=encrypt_value('secret123')
+            project=self.project,
+            key='API_KEY',
+            encrypted_value=encrypt_value('secret123')
         )
         EnvironmentVariable.objects.create(
-            project=self.project, key='DB_HOST', encrypted_value=encrypt_value('db.example.com')
+            project=self.project,
+            key='DB_HOST',
+            encrypted_value=encrypt_value('db.example.com')
         )
         content = self._assemble_and_read('index.js')
         self.assertIn('"secret123"', content)
@@ -249,7 +253,9 @@ class TestEnvVarsInProjectAssembly(TestCase):
     def test_unknown_process_env_left_unchanged(self):
         self._create_source_file('index.js', 'var x = process.env.UNKNOWN_VAR;')
         EnvironmentVariable.objects.create(
-            project=self.project, key='API_KEY', encrypted_value=encrypt_value('secret123')
+            project=self.project,
+            key='API_KEY',
+            encrypted_value=encrypt_value('secret123')
         )
         content = self._assemble_and_read('index.js')
         self.assertIn('process.env.UNKNOWN_VAR', content)
@@ -263,7 +269,9 @@ class TestEnvVarsInProjectAssembly(TestCase):
     def test_value_with_double_quotes_is_escaped(self):
         self._create_source_file('index.js', 'var x = process.env.MSG;')
         EnvironmentVariable.objects.create(
-            project=self.project, key='MSG', encrypted_value=encrypt_value('he said "hello"')
+            project=self.project,
+            key='MSG',
+            encrypted_value=encrypt_value('he said "hello"')
         )
         content = self._assemble_and_read('index.js')
         self.assertIn('"he said \\"hello\\""', content)
@@ -272,7 +280,9 @@ class TestEnvVarsInProjectAssembly(TestCase):
     def test_value_with_single_quotes_is_valid_json(self):
         self._create_source_file('index.js', "var x = process.env.MSG;")
         EnvironmentVariable.objects.create(
-            project=self.project, key='MSG', encrypted_value=encrypt_value("it's working")
+            project=self.project,
+            key='MSG',
+            encrypted_value=encrypt_value("it's working")
         )
         content = self._assemble_and_read('index.js')
         parsed = json.loads('{' + content.replace('var x = ', '"result":').rstrip(';') + '}')
@@ -281,7 +291,9 @@ class TestEnvVarsInProjectAssembly(TestCase):
     def test_value_with_newline_is_escaped(self):
         self._create_source_file('index.js', 'var x = process.env.MSG;')
         EnvironmentVariable.objects.create(
-            project=self.project, key='MSG', encrypted_value=encrypt_value('line1\nline2')
+            project=self.project,
+            key='MSG',
+            encrypted_value=encrypt_value('line1\nline2')
         )
         content = self._assemble_and_read('index.js')
         self.assertNotIn('\n', content.split('= ', 1)[1].rstrip(';'))
