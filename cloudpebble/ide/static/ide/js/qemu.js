@@ -23,6 +23,11 @@
         var mAPIPort = null;
         var mButtonMap = button_map;
         var mPlatform = platform;
+        var mAudioWS = null;
+        var mAudioCtx = null;
+        var mAudioGain = null;
+        var mAudioMuted = false;
+        var mHasAudio = (mPlatform === 'emery' || mPlatform === 'flint');
 
         _.extend(this, Backbone.Events);
 
@@ -48,6 +53,80 @@
 
         function buildURL(endpoint) {
             return (mSecure ? 'https': 'http') + '://' + mHost + ':' + mAPIPort + '/qemu/' + mInstanceID + '/' + endpoint;
+        }
+
+        function setupAudio() {
+            if (!mHasAudio || mAudioWS) return;
+            var AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx || !window.WebSocket) {
+                console.warn('audio: AudioContext/WebSocket unavailable');
+                return;
+            }
+            try {
+                mAudioCtx = new AudioCtx({sampleRate: 16000});
+            } catch (e) {
+                mAudioCtx = new AudioCtx();
+            }
+            mAudioCtx.audioWorklet.addModule('/static/ide/js/pcm-player-worklet.js').then(function() {
+                var node = new AudioWorkletNode(mAudioCtx, 'pcm-player', {
+                    outputChannelCount: [1]
+                });
+                mAudioGain = mAudioCtx.createGain();
+                mAudioGain.gain.value = mAudioMuted ? 0 : 1;
+                node.connect(mAudioGain);
+                mAudioGain.connect(mAudioCtx.destination);
+
+                var wsURL = (mSecure ? 'wss' : 'ws') + '://' + mHost + ':' + mAPIPort
+                          + '/qemu/' + mInstanceID + '/ws/audio';
+                mAudioWS = new WebSocket(wsURL);
+                mAudioWS.binaryType = 'arraybuffer';
+
+                // If the server sample-rate (16k) doesn't match the audio
+                // context's rate, do a cheap linear resample so playback
+                // doesn't sound chipmunked / slowed.
+                var ratio = mAudioCtx.sampleRate / 16000;
+
+                mAudioWS.onmessage = function(ev) {
+                    var view = new DataView(ev.data);
+                    var inLen = view.byteLength / 2;
+                    var inSamples = new Float32Array(inLen);
+                    for (var i = 0; i < inLen; i++) {
+                        inSamples[i] = view.getInt16(i * 2, true) / 32768;
+                    }
+                    var outSamples;
+                    if (ratio === 1) {
+                        outSamples = inSamples;
+                    } else {
+                        var outLen = Math.floor(inLen * ratio);
+                        outSamples = new Float32Array(outLen);
+                        for (var k = 0; k < outLen; k++) {
+                            var srcIdx = k / ratio;
+                            var a = Math.floor(srcIdx);
+                            var b = Math.min(a + 1, inLen - 1);
+                            var t = srcIdx - a;
+                            outSamples[k] = inSamples[a] * (1 - t) + inSamples[b] * t;
+                        }
+                    }
+                    node.port.postMessage(outSamples);
+                };
+                mAudioWS.onclose = function() { teardownAudio(); };
+                mAudioWS.onerror = function(e) { console.warn('audio: ws error', e); };
+            }).catch(function(err) {
+                console.warn('audio: setup failed:', err);
+                teardownAudio();
+            });
+        }
+
+        function teardownAudio() {
+            if (mAudioWS) {
+                try { mAudioWS.close(); } catch (e) {}
+                mAudioWS = null;
+            }
+            if (mAudioCtx) {
+                try { mAudioCtx.close(); } catch (e) {}
+                mAudioCtx = null;
+            }
+            mAudioGain = null;
         }
 
         function sendPing() {
@@ -85,6 +164,12 @@
                 if (mPendingPromise) {
                     if (state == 'normal') {
                         mRFB.get_keyboard().ungrab();
+                        // noVNC's rfb.js leaves Mouse.grab() commented out, so
+                        // no pointer events ever reach the VNC server. Attach
+                        // it on touch-capable platforms.
+                        if (mPlatform === 'emery' || mPlatform === 'gabbro') {
+                            mRFB.get_mouse().grab();
+                        }
                         mPingTimer = setInterval(sendPing, 100000);
                         setTimeout(function () {
                             resolve();
@@ -92,6 +177,7 @@
                         }, 2000);
                         self.trigger('connected');
                         mKickInterval = setInterval(kickRFB, 2000); // By doing this we make sure it keeps updating.
+                        if (mHasAudio) setupAudio();
                     } else if (state == 'failed' || state == 'fatal') {
                         reject();
                         mPendingPromise = null;
@@ -125,6 +211,7 @@
                 }
                 if (mConnected && state == 'disconnected') {
                     mConnected = false;
+                    teardownAudio();
                     killEmulator();
                     clearInterval(mKickInterval);
                     clearInterval(mPingTimer);
@@ -135,6 +222,11 @@
         }
 
         function handleCanvasClick() {
+            // Canvas click is a user gesture — resume the audio context if
+            // it's suspended (autoplay policy).
+            if (mAudioCtx && mAudioCtx.state === 'suspended') {
+                mAudioCtx.resume().catch(function() {});
+            }
             if(mGrabbedKeyboard) return true;
             setTimeout(function() {
                 grabKeyboard();
@@ -164,7 +256,7 @@
                         target: mCanvas[0],
                         encrypt: mSecure,
                         true_color: true, // Ideally this would be false, but qemu doesn't support that.
-                        local_cursor: false,
+                        local_cursor: (mPlatform === 'emery' || mPlatform === 'gabbro'),
                         shared: true,
                         view_only: false,
                         onUpdateState: updateStateHandler(resolve, reject)
@@ -313,6 +405,24 @@
 
         this.getUUID = function() {
             return mInstanceID;
+        };
+
+        this.hasAudio = function() {
+            return mHasAudio;
+        };
+
+        this.setMuted = function(muted) {
+            mAudioMuted = !!muted;
+            if (mAudioGain) {
+                mAudioGain.gain.value = mAudioMuted ? 0 : 1;
+            }
+            if (mAudioCtx && mAudioCtx.state === 'suspended' && !mAudioMuted) {
+                mAudioCtx.resume().catch(function() {});
+            }
+        };
+
+        this.isMuted = function() {
+            return mAudioMuted;
         };
 
         this.handleButton = function(button, down) {

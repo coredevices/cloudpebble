@@ -87,14 +87,6 @@
                     </select>
                 </div>
             </div>
-            <div class="sdk-version control-group">
-                <label class="control-label" for="project-sdk-version">{% trans "SDK Version" %}</label>
-                <div class="controls">
-                    <select id="project-sdk-version">
-                        <option value="4.9.148" selected>{% trans 'SDK 4.9.148' %}</option>
-                    </select>
-                </div>
-            </div>
             <div class="control-group" id="template-holder">
                 <label class="control-label" for="project-template">{% trans "Template" %}</label>
                 <div class="controls">
@@ -158,14 +150,6 @@
                             <span class="help-block">{% trans "This must be a zip file containing a standard Pebble project." %}</span>
                         </div>
                     </div>
-                    <div class="control-group">
-                        <label class="control-label" for="import-zip-sdk-version">{% trans "SDK Version" %}</label>
-                        <div class="controls">
-                            <select id="import-zip-sdk-version">
-                                <option value="4.9.148" selected>{% trans 'SDK 4.9.148' %}</option>
-                            </select>
-                        </div>
-                    </div>
                 </form>
                 <div class="progress progress-striped active hide">
                     <div class="bar" style="width: 100%;"></div>
@@ -190,14 +174,6 @@
                         <label class="control-label" for="import-github-branch">{% trans "Branch (optional)" %}</label>
                         <div class="controls">
                             <input type="text" id="import-github-branch" placeholder="master" />
-                        </div>
-                    </div>
-                    <div class="control-group">
-                        <label class="control-label" for="import-github-sdk-version">{% trans "SDK Version" %}</label>
-                        <div class="controls">
-                            <select id="import-github-sdk-version">
-                                <option value="4.9.148" selected>{% trans 'SDK 4.9.148' %}</option>
-                            </select>
                         </div>
                     </div>
                     {% if user.github_repo_sync %}

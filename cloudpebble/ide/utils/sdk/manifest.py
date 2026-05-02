@@ -300,7 +300,6 @@ def load_manifest_dict(manifest, manifest_kind, default_project_type="native"):
         project["app_company_name"] = manifest["companyName"]
         project["app_version_label"] = manifest["versionLabel"]
         project["app_keys"] = dict_to_pretty_json(manifest.get("appKeys", {}))
-        project["sdk_version"] = "4.9.148"
         project["app_modern_multi_js"] = manifest.get("enableMultiJS", False)
 
     elif manifest_kind == PACKAGE_MANIFEST:
@@ -315,7 +314,6 @@ def load_manifest_dict(manifest, manifest_kind, default_project_type="native"):
         dependencies = manifest.get("dependencies", {})
         manifest = manifest["pebble"]
         project["app_modern_multi_js"] = manifest.get("enableMultiJS", True)
-        project["sdk_version"] = "4.9.148"
     else:
         raise InvalidProjectArchiveException(
             _("Invalid manifest kind: %s") % manifest_kind[-12:]

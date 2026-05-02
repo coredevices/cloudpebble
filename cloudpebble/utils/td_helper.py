@@ -65,7 +65,6 @@ def send_td_event(event, data=None, request=None, project=None, user=None):
             'is_shown_on_communication': project.app_is_shown_on_communication,
             'jshint': project.app_jshint,
             'type': project.project_type,
-            'sdk': project.sdk_version,
         }
 
     data['platform'] = 'cloudpebble'

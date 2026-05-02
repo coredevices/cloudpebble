@@ -44,7 +44,6 @@ CloudPebble.Settings = (function() {
         var save = function() {
 
             var name = pane.find('#settings-name').val();
-            var sdk_version = pane.find('#settings-sdk-version').val();
             var short_name = pane.find('#settings-short-name').val();
             var long_name = pane.find('#settings-long-name').val();
             var company_name = pane.find('#settings-company-name').val();
@@ -178,7 +177,6 @@ CloudPebble.Settings = (function() {
             });
 
 
-            saved_settings['sdk_version'] = sdk_version;
             saved_settings['app_short_name'] = short_name;
             saved_settings['app_long_name'] = long_name;
             saved_settings['app_company_name'] = company_name;
@@ -208,7 +206,6 @@ CloudPebble.Settings = (function() {
                 CloudPebble.ProjectInfo.app_is_shown_on_communication = app_is_shown_on_communication;
                 CloudPebble.ProjectInfo.app_capabilities = app_capabilities;
                 CloudPebble.ProjectInfo.app_platforms = app_platforms;
-                CloudPebble.ProjectInfo.sdk_version = sdk_version;
                 CloudPebble.ProjectInfo.app_modern_multi_js = app_modern_multi_js;
 
                 $('.project-name').text(name);

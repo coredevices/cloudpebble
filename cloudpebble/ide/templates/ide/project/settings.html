@@ -16,15 +16,6 @@
                     {{project.get_project_type_display}}
                 </div>
             </div>
-            <div class="sdk-version native-only control-group">
-                <label class="control-label" for="settings-sdk-version">{% trans "SDK Version" %}</label>
-                <div class="controls">
-                    <select id="settings-sdk-version">
-                        <option value="4.9.148" {% if project.sdk_version == '4.9.148' %}selected{% endif %}>{% trans 'SDK 4.9.148' %}</option>
-                    </select>
-                    <span class="help-block">You should reload the page after changing and saving this setting.</span>
-                </div>
-            </div>
         </div>
         <div class="well">
             <div class="control-group supports-aplite not-alloy-platform">

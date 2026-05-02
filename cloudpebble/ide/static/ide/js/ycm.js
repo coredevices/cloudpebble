@@ -147,9 +147,8 @@ CloudPebble.YCM = new (function() {
         }
         mIsInitialising = true;
         var platforms = (CloudPebble.ProjectInfo.app_platforms || 'aplite,basalt');
-        var sdk_version = CloudPebble.ProjectInfo.sdk_version;
         var spinup_data;
-        mInitPromise = Ajax.Post('/ide/project/' + PROJECT_ID + '/autocomplete/init', {platforms: platforms, sdk: sdk_version})
+        mInitPromise = Ajax.Post('/ide/project/' + PROJECT_ID + '/autocomplete/init', {platforms: platforms})
             .then(function(data) {
                 spinup_data = data;
                 mUUID = data.uuid;

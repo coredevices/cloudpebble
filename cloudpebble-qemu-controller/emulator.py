@@ -4,12 +4,17 @@ import gevent
 import gevent.pool
 import logging
 import os
+import re
 import tempfile
 import settings
 import shutil
 import socket
 import subprocess
 import itertools
+import uuid as _uuid
+
+AUDIO_PLATFORMS = ('emery', 'flint')
+_PACTL_MODULE_ID_RE = re.compile(r'^\s*(\d+)\s*$', re.MULTILINE)
 
 _used_displays = set()
 def _find_display():
@@ -40,11 +45,15 @@ class Emulator(object):
         self.oauth = oauth
         self.client_ip = client_ip
         self.persist_dir = None
+        self.audio_sink = None
+        self.audio_module_id = None
+        self.audio_client_conf = None
 
     def run(self):
         self.group = gevent.pool.Group()
         self._choose_ports()
         self._make_spi_image()
+        self._load_audio_sink()
         self._spawn_qemu()
         gevent.sleep(4)  # wait for the pebble to boot.
         self._spawn_pkjs()
@@ -86,6 +95,12 @@ class Emulator(object):
                 shutil.rmtree(self.persist_dir)
             except OSError:
                 pass
+        if self.audio_sink is not None:
+            # Unloading the null-sink also drops its monitor source, which
+            # gives EOF to any parec subprocesses serving live WS audio
+            # tunnels — they exit and the WS read loop in controller.py
+            # closes naturally. No explicit subscriber tracking needed.
+            self._unload_audio_sink()
         self.group.kill(block=True)
 
     def is_alive(self):
@@ -114,6 +129,63 @@ class Emulator(object):
                 with open(raw_path, 'rb') as f:
                     spi.write(f.read())
 
+    def _load_audio_sink(self):
+        if self.platform not in AUDIO_PLATFORMS:
+            return
+        sink_name = 'emu_' + _uuid.uuid4().hex
+        try:
+            out = subprocess.check_output([
+                'pactl', 'load-module', 'module-null-sink',
+                'sink_name=' + sink_name,
+                'channel_map=mono',
+                'rate=16000',
+                'format=s16le',
+            ], stderr=subprocess.STDOUT, timeout=5).decode().strip()
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            logging.exception('audio: pactl load-module failed: %s', getattr(e, 'output', ''))
+            return
+        m = _PACTL_MODULE_ID_RE.search(out)
+        if not m:
+            logging.error('audio: unexpected pactl output: %r', out)
+            return
+        self.audio_sink = sink_name
+        self.audio_module_id = int(m.group(1))
+        # Per-emulator pulse client.conf as belt-and-suspenders for routing —
+        # libpulse uses default-sink from this when QEMU passes dev=NULL.
+        self.audio_client_conf = '/tmp/pulse-' + sink_name + '.conf'
+        try:
+            with open(self.audio_client_conf, 'w') as f:
+                f.write('default-sink = ' + sink_name + '\n')
+        except OSError:
+            logging.exception('audio: failed to write %s', self.audio_client_conf)
+            self.audio_client_conf = None
+        # Make our sink the server-side default. QEMU's libpulse passes
+        # dev=NULL to pa_simple_new, so the server routes to its current
+        # default. Concurrent launches race here — last writer wins — but
+        # previously-attached streams stay bound to their original sink,
+        # so existing emulators keep their routing intact.
+        try:
+            subprocess.call(['pactl', 'set-default-sink', sink_name], timeout=5)
+        except (OSError, subprocess.TimeoutExpired):
+            logging.exception('audio: failed to set default sink %s', sink_name)
+        logging.info('audio: created null-sink %s module=%s', sink_name, self.audio_module_id)
+
+    def _unload_audio_sink(self):
+        if self.audio_module_id is None:
+            return
+        try:
+            subprocess.call(['pactl', 'unload-module', str(self.audio_module_id)], timeout=5)
+        except (OSError, subprocess.TimeoutExpired):
+            logging.exception('audio: failed to unload %s', self.audio_sink)
+        if self.audio_client_conf:
+            try:
+                os.unlink(self.audio_client_conf)
+            except OSError:
+                pass
+        self.audio_sink = None
+        self.audio_module_id = None
+        self.audio_client_conf = None
+
 
     @staticmethod
     def _find_port():
@@ -125,59 +197,66 @@ class Emulator(object):
 
     def _spawn_qemu(self):
         image_dir = self._find_qemu_images()
+        micro_flash = image_dir + "qemu_micro_flash.bin"
+        spi_flash = self.spi_image.name
+
         qemu_args = [
             settings.QEMU_BIN,
             "-rtc", "base=localtime",
-            "-pflash", image_dir + "qemu_micro_flash.bin",
-            "-serial", "null",  # this isn't useful, but...
-            "-serial", "tcp:127.0.0.1:%d,server,nowait" % self.bt_port,   # Used for bluetooth data
-            "-serial", "tcp:127.0.0.1:%d,server" % self.console_port,   # Used for console
+            "-kernel", micro_flash,
+            "-serial", "null",
+            "-serial", "tcp:127.0.0.1:%d,server=on,wait=off" % self.bt_port,   # Bluetooth
+            "-serial", "tcp:127.0.0.1:%d,server=on" % self.console_port,        # Console (blocks until connect)
             "-monitor", "stdio",
-            "-vnc", ":%d,password,websocket=%d" % (self.vnc_display, self.vnc_ws_port)
+            "-vnc", ":%d,password=on,websocket=%d" % (self.vnc_display, self.vnc_ws_port),
         ]
-        if self.platform == 'aplite':
-            qemu_args.extend([
-                "-machine", "pebble-bb2",
-                "-mtdblock", self.spi_image.name,
-                "-cpu", "cortex-m3",
-            ])
-        elif self.platform == 'basalt':
-            qemu_args.extend([
-                "-machine", "pebble-snowy-bb",
-                "-pflash", self.spi_image.name,
-                "-cpu", "cortex-m4",
-            ])
-        elif self.platform == 'chalk':
-            qemu_args.extend([
-                "-machine", "pebble-s4-bb",
-                "-pflash", self.spi_image.name,
-                "-cpu", "cortex-m4",
-            ])
-        elif self.platform == 'diorite':
-            qemu_args.extend([
-                "-machine", "pebble-silk-bb",
-                "-mtdblock", self.spi_image.name,
-                "-cpu", "cortex-m4",
-            ])
-        elif self.platform == 'emery':
-            qemu_args.extend([
-                "-machine", "pebble-snowy-emery-bb",
-                "-pflash", self.spi_image.name,
-                "-cpu", "cortex-m4",
-            ])
-        elif self.platform == 'gabbro':
-            qemu_args.extend([
-                "-machine", "pebble-spalding-gabbro-bb",
-                "-pflash", self.spi_image.name,
-                "-cpu", "cortex-m4",
-            ])
-        elif self.platform == 'flint':
-            qemu_args.extend([
-                "-machine", "pebble-silk-bb",
-                "-cpu", "cortex-m4",
-                "-mtdblock", self.spi_image.name,
-            ])
-        self.qemu = subprocess.Popen(qemu_args, cwd=settings.QEMU_DIR, stdout=None, stdin=subprocess.PIPE, stderr=None,
+        if settings.QEMU_DATA_DIR:
+            qemu_args[1:1] = ["-L", settings.QEMU_DATA_DIR]
+
+        # Single rollback toggle: set to False to revert emery/flint/gabbro
+        # to their legacy machine names without touching the SDK pin.
+        use_new_boards = True
+
+        spi_drive = ['-drive', 'if=none,id=spi-flash,file=%s,format=raw' % spi_flash]
+        mtd_args = ['-mtdblock', spi_flash]
+        mtd_drive = ['-drive', 'if=mtd,format=raw,file=%s' % spi_flash]
+        if self.platform in AUDIO_PLATFORMS and self.audio_sink:
+            audio_args = [
+                '-audiodev',
+                'pa,id=audio0,server=unix:/run/cloudpebble-pipewire/pulse/native',
+                '-machine', 'audiodev=audio0',
+            ]
+        else:
+            audio_args = ['-audiodev', 'none,id=audio0', '-machine', 'audiodev=audio0']
+
+        if use_new_boards:
+            platform_args = {
+                'aplite':  ['-machine', 'pebble-bb2',      '-cpu', 'cortex-m3']  + mtd_args,
+                'basalt':  ['-machine', 'pebble-snowy-bb', '-cpu', 'cortex-m4']  + spi_drive,
+                'chalk':   ['-machine', 'pebble-s4-bb',    '-cpu', 'cortex-m4']  + spi_drive,
+                'diorite': ['-machine', 'pebble-silk-bb',  '-cpu', 'cortex-m4']  + mtd_args,
+                'emery':   ['-machine', 'pebble-emery',    '-cpu', 'cortex-m33'] + mtd_drive + audio_args,
+                'flint':   ['-machine', 'pebble-flint',    '-cpu', 'cortex-m4']  + mtd_drive + audio_args,
+                'gabbro':  ['-machine', 'pebble-gabbro',   '-cpu', 'cortex-m33'] + mtd_drive,
+            }
+        else:
+            platform_args = {
+                'aplite':  ['-machine', 'pebble-bb2',                '-cpu', 'cortex-m3'] + mtd_args,
+                'basalt':  ['-machine', 'pebble-snowy-bb',           '-cpu', 'cortex-m4'] + spi_drive,
+                'chalk':   ['-machine', 'pebble-s4-bb',              '-cpu', 'cortex-m4'] + spi_drive,
+                'diorite': ['-machine', 'pebble-silk-bb',            '-cpu', 'cortex-m4'] + mtd_args,
+                'emery':   ['-machine', 'pebble-snowy-emery-bb',     '-cpu', 'cortex-m4'] + spi_drive,
+                'gabbro':  ['-machine', 'pebble-spalding-gabbro-bb', '-cpu', 'cortex-m4'] + spi_drive,
+                'flint':   ['-machine', 'pebble-silk-bb',            '-cpu', 'cortex-m4'] + mtd_args,
+            }
+        qemu_args.extend(platform_args[self.platform])
+
+        logging.info("spawning qemu (%s): %s", self.platform, " ".join(qemu_args))
+        qemu_env = os.environ.copy()
+        if self.platform in AUDIO_PLATFORMS and self.audio_sink and self.audio_client_conf:
+            qemu_env['PULSE_CLIENTCONFIG'] = self.audio_client_conf
+        self.qemu = subprocess.Popen(qemu_args, stdout=None, stdin=subprocess.PIPE, stderr=None,
+                                      env=qemu_env,
                                       preexec_fn=lambda: os.nice(19))
         self.qemu.stdin.write(b"change vnc password\n")
         self.qemu.stdin.write(("%s\n" % self.token[:8]).encode())

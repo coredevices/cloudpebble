@@ -3,7 +3,8 @@ from django.core.validators import RegexValidator
 
 class RegexHolder(object):
     regex_dictionary = {
-        # Match major[.minor], where major and minor are numbers between 0 and 255 with no leading 0s
+        # Match major[.minor], where major and minor are numbers between 0 and 255 with no leading 0s.
+        # Historical key name; despite the name this is used to validate Pebble app version labels.
         'sdk_version': r'^(0|[1-9]\d?|1\d{2}|2[0-4]\d|25[0-5])(\.(0|[1-9]\d?|1\d{2}|2[0-4]\d|25[0-5]))?$',
 
         # Match x.y.z, each a number (tolerate leading zeros for real-world Pebble projects)
