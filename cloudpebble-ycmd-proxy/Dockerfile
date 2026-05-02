@@ -1,19 +1,18 @@
-FROM python:3.11-slim-bookworm AS ycmd-builder
+FROM python:3.12-slim-bookworm AS ycmd-builder
 
 # Build dependencies for ycmd with clang-completer
 RUN apt-get update && apt-get install -y \
   cmake build-essential libncurses-dev git \
   && rm -rf /var/lib/apt/lists/*
 
-# Clone and build ycmd (ycm-core fork, Python 3 compatible)
+# Clone and build ycmd
 RUN git clone https://github.com/ycm-core/ycmd.git /ycmd && \
   cd /ycmd && \
-  git reset --hard 6297cad7dfffd2a117275b4fe8a867581b4ab236 && \
   git submodule update --init --recursive && \
   python3 build.py --clang-completer --force-sudo
 
 # --- Runtime stage ---
-FROM python:3.11-slim-bookworm
+FROM python:3.12-slim-bookworm
 
 # Runtime deps
 RUN apt-get update && apt-get install -y \
