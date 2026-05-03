@@ -13,6 +13,7 @@ from django.utils.timezone import now
 import apptools.addr2lines
 from ide.models.build import BuildResult, BuildSize
 from ide.models.dependency import validate_dependency_version
+from ide.utils.crypto import decrypt_value
 from ide.utils.sdk.project_assembly import assemble_project
 from utils.td_helper import send_td_event
 
@@ -84,6 +85,11 @@ def run_compile(build_result):
                                     ':/root/.pebble-sdk:/root/.local',
                 'HOME': '/root'
             })
+
+            env_vars = project.env_vars.all()
+            for ev in env_vars:
+                decrypted = decrypt_value(ev.encrypted_value)
+                environ[ev.key] = decrypted
 
             # Install dependencies if there are any
             dependencies = project.get_dependencies()

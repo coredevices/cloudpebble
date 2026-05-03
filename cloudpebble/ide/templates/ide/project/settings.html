@@ -225,6 +225,19 @@
                     </div>
                 </div>
             </div>
+            <div class="well supports-message-keys">
+                <div class="control-group supports-message-keys">
+                    <label class="control-label" for="settings-env-vars">{% trans "PebbleKit JS Environment Variables" %}</label>
+                    <div class="controls">
+                        <table id="settings-env-vars">
+                        </table>
+                        <div class="help-block">
+                            {% trans "Environment variables that will be available at build time. Values are stored encrypted and never shown after saving." %}<br><br>
+                            {% trans "In your PebbleKit JS source files, reference variables as <code>process.env.KEY</code>. During the build, these references will be replaced with the actual values as JSON strings. For example, <code>process.env.KEY</code> becomes <code>&quot;your-value&quot;</code>. Variables not defined here will be left as <code>process.env.KEY</code>." %}
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="well">
                 <div class="control-group">
                     <label class="control-label" for="settings-capabilities-location">{% trans "Uses Location" context "checkbox label" %}</label>

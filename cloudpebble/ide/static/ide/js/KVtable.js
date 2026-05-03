@@ -21,7 +21,8 @@ CloudPebble.KVTable = function(table_elm, options) {
         data: [],
         key_placeholder: gettext('New Entry'),
         value_placeholder: '',
-        default_value: null
+        default_value: null,
+        autocomplete: null
     });
 
     if (opts.default_value === null && opts.value_type == 'number') opts.default_value = '0';
@@ -51,7 +52,8 @@ CloudPebble.KVTable = function(table_elm, options) {
                     .val(key ? value : opts.default_value)
                     .addClass('kv-value')
                     .attr('type', opts.value_type)
-                    .attr('placeholder', key ? null : opts.value_placeholder)),
+                    .attr('placeholder', key ? null : opts.value_placeholder)
+                    .attr('autocomplete', opts.autocomplete || null)),
             $('<td>').append(
                 $('<button>')
                     .prop('disabled', !key)
