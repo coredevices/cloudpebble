@@ -9,12 +9,31 @@ Try it out at https://cloudpebble.repebble.com
 ```bash
 git clone https://github.com/coredevices/cloudpebble.git
 cd cloudpebble
-export NGINX_PORT=8080
-export PUBLIC_URL=http://localhost:$NGINX_PORT
+# .env ships with working defaults — review and customise as needed
 docker compose build
 docker compose up
 # Open http://localhost:8080 and register an account
 ```
+
+All runtime configuration lives in `.env`. Edit it before building:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PEBBLE_SDK_VERSION` | `4.9.169` | SDK version installed in all containers (build fails if unset) |
+| `NODE_VERSION_WEB` | `20.11.0` | Node.js version in web/celery images |
+| `NODE_VERSION_YCMD` | `16.20.2` | Node.js version in ycmd image |
+| `NGINX_PORT` | `8080` | Host port nginx binds to |
+| `PUBLIC_URL` | `http://localhost:8080` | Public-facing URL (see note below) |
+| `EXPECT_SSL` | `no` | Set to `yes` for HTTPS deployments |
+| `EMULATOR_FIXED_LIMIT` | `90` | Max concurrent emulators |
+| `LIBPEBBLE_PROXY` | `wss://cloudpebble-proxy.repebble.com/tool` | libpebble proxy WebSocket URL |
+| `CLOUDPEBBLE_PROXY` | `wss://cloudpebble-proxy.repebble.com/tool` | CloudPebble proxy WebSocket URL |
+| `PEBBLE_AUTH_URL` | `https://auth.rebble.io` | Rebble Auth endpoint |
+| `FIREBASE_PROJECT_ID` | `coreapp-ce061` | Firebase project for push notifications |
+| `POSTGRES_HOST_AUTH_METHOD` | `trust` | PostgreSQL auth method (**change for production**) |
+| `NGINX_IMAGE` | `nginx:alpine` | nginx container image |
+| `REDIS_IMAGE` | `redis:7` | Redis container image |
+| `POSTGRES_IMAGE` | `postgres:16` | PostgreSQL container image |
 
 > **Note:** `PUBLIC_URL` tells Django how the outside world reaches the site (used for generating callback URLs, media paths, etc.). `NGINX_PORT` controls which host port nginx binds to. In dev, they typically match; in production behind a reverse proxy, `PUBLIC_URL` is the external URL and `NGINX_PORT` may differ.
 
@@ -25,7 +44,8 @@ The `GitHub Repo Sync` card changes based on `PUBLIC_URL`, not the browser hostn
 To verify the localhost behavior:
 
 ```bash
-NGINX_PORT=8080 PUBLIC_URL=http://localhost:8080 docker compose up -d --build --force-recreate web nginx
+# No extra env needed — defaults in .env already set localhost:8080
+docker compose up -d --build --force-recreate web nginx
 # Open http://localhost:8080/ide/settings
 ```
 
@@ -46,8 +66,11 @@ In production, the `Install GitHub app` button handles the full Repo Sync flow: 
 To verify the prod-like behavior locally:
 
 ```bash
-NGINX_PORT=8080 PUBLIC_URL=http://prod-preview:8080 docker compose up -d --build --force-recreate web nginx
-# Open http://localhost:8080/ide/settings
+# Override PUBLIC_URL to simulate a production hostname
+sed -i 's|^PUBLIC_URL=.*|PUBLIC_URL=http://prod-preview:8080|' .env
+docker compose up -d --build --force-recreate web nginx
+# Restore when done
+sed -i 's|^PUBLIC_URL=.*|PUBLIC_URL=http://localhost:8080|' .env
 ```
 
 Expected in `GitHub Repo Sync`: `Install GitHub app` only.
@@ -65,8 +88,9 @@ Use a hard refresh or private window if the old button state is still shown.
 For HTTPS behind a reverse proxy:
 
 ```bash
-export PUBLIC_URL=https://your-domain.com
-export EXPECT_SSL=yes
+# Edit .env:
+#   PUBLIC_URL=https://your-domain.com
+#   EXPECT_SSL=yes
 docker compose build
 docker compose up -d
 ```
@@ -80,24 +104,11 @@ Use this to bootstrap a brand-new `exe.dev` VM and get CloudPebble running.
 ```bash
 git clone https://github.com/coredevices/cloudpebble.git
 cd cloudpebble
-cp .env.example .env 2>/dev/null || true
+# .env ships with working defaults — override for your deployment:
+sed -i 's|^PUBLIC_URL=.*|PUBLIC_URL=https://YOURDOMAIN.exe.xyz|' .env
+sed -i 's|^EXPECT_SSL=.*|EXPECT_SSL=yes|' .env
+sed -i 's|^NGINX_PORT=.*|NGINX_PORT=8000|' .env
 ```
-
-Set `.env` values for your dev host and secrets (at minimum):
-
-```bash
-PUBLIC_URL=https://YOURDOMAIN.exe.xyz
-EXPECT_SSL=yes
-NGINX_PORT=8000
-QEMU_SERVER=root@<your-vm-or-qemu-host>
-QEMU_SSH_KEY=~/.ssh/id_pub
-```
-
-- **`PUBLIC_URL`** — The public-facing URL for the instance. Used for browser-facing links.
-- **`NGINX_PORT`** — Set to `8000` to override system-level nginx.
-- **`SECRET_KEY`** — Optional. Django secret key (auto-generated and persisted to a Docker volume if not set). Generate your own with `python3 -c "import secrets; print(secrets.token_urlsafe(50))"` if you prefer.
-
-The `.env` file goes on the VM at `~/cloudpebble/.env` (excluded from rsync by `deploy_dev.sh`).
 
 ### 2. Create/prepare the exe.dev VM
 
@@ -179,9 +190,9 @@ User.objects.create_user('testuser', 'test@example.com', 'testpass123')
 
 ```
 Browser → nginx:$NGINX_PORT → web:80       (Django app)
-                             → qemu:80      (emulator, WebSocket/VNC)
-                             → ycmd:80      (code completion, WebSocket)
-                             → s3:4569      (build artifacts via /s3builds/)
+                              → qemu:80      (emulator, WebSocket/VNC)
+                              → ycmd:80      (code completion, WebSocket)
+                              → s3:4569      (build artifacts via /s3builds/)
 
 web ←→ postgres      (database)
     ←→ redis         (Celery broker)
@@ -194,13 +205,13 @@ celery ←→ same backends (background build tasks)
 
 | Service | Image | Purpose |
 |---------|-------|---------|
-| **nginx** | nginx:alpine | Reverse proxy, WebSocket routing, S3 proxy |
+| **nginx** | `$NGINX_IMAGE` | Reverse proxy, WebSocket routing, S3 proxy |
 | **web** | Python 3.11 + Django 4.2 | IDE frontend and REST API |
 | **celery** | Same as web | Background build tasks |
 | **qemu** | Python 3.11 + QEMU | Pebble emulator with VNC |
 | **ycmd** | Python 3.11 + ycmd/clang | C code completion |
-| **redis** | redis | Celery task broker |
-| **postgres** | postgres:16 | Database |
+| **redis** | `$REDIS_IMAGE` | Celery task broker |
+| **postgres** | `$POSTGRES_IMAGE` | Database |
 | **s3** | kuracloud/fake-s3 | S3-compatible object storage |
 
 ### Three Codebases
@@ -270,18 +281,16 @@ User.objects.create_user('username', 'email@example.com', 'password')
 
 ### Environment Variables
 
-Key variables set in `docker-compose.yml`:
+All configuration lives in `.env` (see the full table in the self-hosting section). Key variables:
 
 | Variable | Purpose |
 |----------|---------|
-| `PUBLIC_URL` | Public-facing URL (e.g. `http://localhost:8080`). In dev, port should match `NGINX_PORT`; in production behind a reverse proxy, they may differ. |
-| `NGINX_PORT` | Host port nginx binds to (default: `80`) |
+| `PEBBLE_SDK_VERSION` | SDK version across all containers — single source of truth |
+| `PUBLIC_URL` | Public-facing URL. In dev, port matches `NGINX_PORT`; in production behind a reverse proxy, they may differ |
+| `NGINX_PORT` | Host port nginx binds to (default: `8080`) |
 | `SECRET_KEY` | Django secret key (auto-generated and persisted if not set) |
 | `EXPECT_SSL` | Set to `yes` for HTTPS deployments |
-| `AWS_S3_FAKE_S3` | fake-s3 endpoint (default: `s3:4569`) |
-| `QEMU_URLS` | Emulator controller URL |
-| `YCM_URLS` | Code completion proxy URL |
-| `GITHUB_ID` / `GITHUB_SECRET` | GitHub OAuth (optional) |
+| `POSTGRES_HOST_AUTH_METHOD` | PostgreSQL auth — **change from `trust` for production** |
 
 ## Tech Stack
 

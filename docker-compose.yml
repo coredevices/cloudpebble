@@ -2,9 +2,9 @@ name: cloudpebble
 
 services:
   nginx:
-    image: nginx:alpine
+    image: ${NGINX_IMAGE:-nginx:alpine}
     ports:
-      - "${NGINX_PORT:-80}:80"
+      - "${NGINX_PORT:-8080}:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
@@ -17,6 +17,7 @@ services:
       context: cloudpebble/
       args:
         PEBBLE_SDK_VERSION: ${PEBBLE_SDK_VERSION}
+        NODE_VERSION: ${NODE_VERSION_WEB:-20.11.0}
     links:
       - redis
       - postgres
@@ -45,10 +46,10 @@ services:
       - YCMD_PUBLIC_URL=${YCMD_PUBLIC_URL:-}
       - PUBLIC_URL=${PUBLIC_URL}/
       - EXPECT_SSL=${EXPECT_SSL:-no}
-      - LIBPEBBLE_PROXY=wss://cloudpebble-proxy.repebble.com/tool
+      - LIBPEBBLE_PROXY=${LIBPEBBLE_PROXY:-wss://cloudpebble-proxy.repebble.com/tool}
       - CLOUDPEBBLE_PROXY=${CLOUDPEBBLE_PROXY:-wss://cloudpebble-proxy.repebble.com/tool}
-      - PEBBLE_AUTH_URL=https://auth.rebble.io
-      - FIREBASE_PROJECT_ID=coreapp-ce061
+      - PEBBLE_AUTH_URL=${PEBBLE_AUTH_URL:-https://auth.rebble.io}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-coreapp-ce061}
       - GITHUB_ID=${GITHUB_ID:-}
       - GITHUB_SECRET=${GITHUB_SECRET:-}
       - GITHUB_SYNC_CLIENT_ID=${GITHUB_SYNC_CLIENT_ID:-}
@@ -59,6 +60,7 @@ services:
       context: cloudpebble/
       args:
         PEBBLE_SDK_VERSION: ${PEBBLE_SDK_VERSION}
+        NODE_VERSION: ${NODE_VERSION_WEB:-20.11.0}
     links:
       - redis
       - postgres
@@ -98,14 +100,15 @@ services:
       context: cloudpebble-ycmd-proxy/
       args:
         PEBBLE_SDK_VERSION: ${PEBBLE_SDK_VERSION}
+        NODE_VERSION: ${NODE_VERSION_YCMD:-16.20.2}
 
   redis:
-    image: redis
+    image: ${REDIS_IMAGE:-redis:7}
 
   postgres:
-    image: postgres:16
+    image: ${POSTGRES_IMAGE:-postgres:16}
     environment:
-      - POSTGRES_HOST_AUTH_METHOD=trust
+      - POSTGRES_HOST_AUTH_METHOD=${POSTGRES_HOST_AUTH_METHOD:-trust}
     volumes:
       - postgres-data:/var/lib/postgresql/data
 

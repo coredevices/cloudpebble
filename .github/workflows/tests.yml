@@ -14,8 +14,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Build and run tests
         run: |
-          export PUBLIC_URL=http://localhost:8080
-          export NGINX_PORT=8080
+          sed -i 's|^NGINX_PORT=.*|NGINX_PORT=8080|' .env
+          sed -i 's|^PUBLIC_URL=.*|PUBLIC_URL=http://localhost:8080|' .env
           docker compose build
           docker compose up -d
           # Wait for web to be ready
