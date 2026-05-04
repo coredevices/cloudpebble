@@ -13,7 +13,10 @@ services:
       # - ycmd  # Optional - code completion
 
   web:
-    build: cloudpebble/
+    build:
+      context: cloudpebble/
+      args:
+        PEBBLE_SDK_VERSION: ${PEBBLE_SDK_VERSION}
     links:
       - redis
       - postgres
@@ -52,7 +55,10 @@ services:
       - REDIS_URL=${REDIS_URL:-}
 
   celery:
-    build: cloudpebble/
+    build:
+      context: cloudpebble/
+      args:
+        PEBBLE_SDK_VERSION: ${PEBBLE_SDK_VERSION}
     links:
       - redis
       - postgres
@@ -80,7 +86,10 @@ services:
       - REDIS_URL=${REDIS_URL:-}
 
   qemu:
-    build: cloudpebble-qemu-controller/
+    build:
+      context: cloudpebble-qemu-controller/
+      args:
+        PEBBLE_SDK_VERSION: ${PEBBLE_SDK_VERSION}
     restart: unless-stopped
     environment:
       - EMULATOR_FIXED_LIMIT=${EMULATOR_FIXED_LIMIT:-90}
@@ -88,7 +97,10 @@ services:
       - emulator
 
   ycmd:
-    build: cloudpebble-ycmd-proxy/
+    build:
+      context: cloudpebble-ycmd-proxy/
+      args:
+        PEBBLE_SDK_VERSION: ${PEBBLE_SDK_VERSION}
     profiles:
       - codecomplete
 
