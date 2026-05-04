@@ -1,10 +1,12 @@
 import json
 import os
+import re
 import shutil
 
 from django.conf import settings
 
 from ide.models import ResourceFile
+from ide.utils.crypto import decrypt_value
 from .manifest import manifest_name_for_project, generate_manifest_dict
 from ide.utils.sdk import generate_wscript_file, generate_jshint_file
 
@@ -58,6 +60,39 @@ def assemble_resources(base_dir, resource_path, resources, type_restrictions=Non
         f.copy_all_variants_to_dir(target_dir)
 
 
+def _inject_env_vars(base_dir, project, env_map):
+    """Replace process.env.KEY references in pkjs source files with actual values."""
+    from ide.models.files import SourceFile
+
+    pattern = re.compile(r'process\.env\.([a-zA-Z_][a-zA-Z0-9_]*)')
+    pkjs_dirs = SourceFile.DIR_MAP.get(project.project_type, {}).get('pkjs', [])
+    if not pkjs_dirs:
+        return
+
+    for pkjs_dir in pkjs_dirs:
+        dir_path = os.path.join(base_dir, pkjs_dir)
+        if not os.path.isdir(dir_path):
+            continue
+        for root, dirs, files in os.walk(dir_path):
+            for fname in files:
+                if not fname.endswith('.js') and not fname.endswith('.json'):
+                    continue
+                fpath = os.path.join(root, fname)
+                with open(fpath, 'r') as f:
+                    content = f.read()
+
+                def _replace(match):
+                    key = match.group(1)
+                    if key in env_map:
+                        return json.dumps(env_map[key])
+                    return match.group(0)
+
+                new_content = pattern.sub(_replace, content)
+                if new_content != content:
+                    with open(fpath, 'w') as f:
+                        f.write(new_content)
+
+
 def assemble_project(project, base_dir, build_result=None):
     """ Copy all files necessary to build a project into a directory. """
     resources = project.resources.all()
@@ -89,3 +124,9 @@ def assemble_project(project, base_dir, build_result=None):
 
     with open(os.path.join(base_dir, manifest_filename), 'w') as f:
         f.write(json.dumps(manifest_dict))
+
+    # Replace process.env.KEY references in pkjs source files with actual values
+    env_vars = project.env_vars.all()
+    if env_vars:
+        env_map = {ev.key: decrypt_value(ev.encrypted_value) for ev in env_vars}
+        _inject_env_vars(base_dir, project, env_map)

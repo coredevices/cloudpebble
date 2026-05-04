@@ -17,6 +17,7 @@ from ide.api.project import (
     save_project_settings,
     save_project_dependencies,
     save_published_media,
+    save_env_vars,
     delete_project,
     begin_export,
     import_zip,
@@ -105,6 +106,11 @@ urlpatterns = [
         r"^project/(?P<project_id>\d+)/save_published_media",
         save_published_media,
         name="save_published_media",
+    ),
+    re_path(
+        r"^project/(?P<project_id>\d+)/save_env_vars",
+        save_env_vars,
+        name="save_env_vars",
     ),
     re_path(
         r"^project/(?P<project_id>\d+)/delete", delete_project, name="delete_project"

@@ -257,6 +257,19 @@ class Project(IdeModel):
         return u"%s" % self.name
 
 
+class EnvironmentVariable(IdeModel):
+    project = models.ForeignKey(Project, related_name='env_vars', on_delete=models.CASCADE)
+    key = models.CharField(max_length=100)
+    encrypted_value = models.TextField()
+
+    class Meta(IdeModel.Meta):
+        db_table = 'cloudpebble_env_vars'
+        unique_together = (('project', 'key'),)
+
+    def __unicode__(self):
+        return u"%s" % self.key
+
+
 class TemplateProject(Project):
     KIND_TEMPLATE = 1
     KIND_SDK_DEMO = 2

@@ -1,6 +1,7 @@
 FROM python:3.11-slim-trixie
 LABEL maintainer="CloudPebble Contributors"
 
+ARG PEBBLE_SDK_VERSION
 ENV NPM_CONFIG_LOGLEVEL=info NODE_VERSION=20.11.0 DJANGO_VERSION=4.2 NODEJS_CHECK_SIGNATURES=no
 
 # Node stuff.
@@ -70,8 +71,8 @@ else:
 PY
 
 # Install Pebble SDK (downloads SDK + toolchain + QEMU)
-RUN pebble sdk install 4.9.169
-RUN pebble sdk activate 4.9.169
+RUN pebble sdk install $PEBBLE_SDK_VERSION
+RUN pebble sdk activate $PEBBLE_SDK_VERSION
 
 # Set up SDK paths for CloudPebble
 ENV PEBBLE_SDK_PATH=/root/.pebble-sdk

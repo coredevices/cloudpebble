@@ -14,7 +14,7 @@ from django.views.decorators.http import require_safe, require_POST
 from django.utils.translation import gettext as _
 
 from ide.models.build import BuildResult
-from ide.models.project import Project, TemplateProject
+from ide.models.project import Project, TemplateProject, EnvironmentVariable
 from ide.models.files import SourceFile, ResourceFile, PublishedMedia
 from ide.tasks.archive import create_archive, do_import_archive
 from ide.tasks.build import run_compile
@@ -23,6 +23,7 @@ from ide.tasks.git import do_import_github
 from ide.utils.alloy_templates import list_alloy_templates, build_template_archive
 from ide.utils.c_templates import list_c_templates, build_c_template_archive
 from utils.td_helper import send_td_event
+from ide.utils.crypto import encrypt_value, decrypt_value, ENV_VAR_MASK
 from utils.jsonview import json_view, BadRequest
 
 __author__ = 'katharine'
@@ -459,6 +460,7 @@ def project_info(request, project_id):
         'supported_platforms': project.supported_platforms,
         'has_embeddedjs': project.has_embeddedjs_files,
         'published_media': _serialize_published_media(project),
+        'env_vars': _serialize_env_vars(project),
     }
 
 
@@ -877,6 +879,66 @@ def _serialize_published_media(project):
         }
         for pm in project.published_media.all()
     ]
+
+
+def _serialize_env_vars(project):
+    return [[ev.key, ENV_VAR_MASK] for ev in project.env_vars.all().order_by('key')]
+
+
+@require_POST
+@login_required
+@json_view
+def save_env_vars(request, project_id):
+    project = get_object_or_404(Project, pk=project_id, owner=request.user)
+
+    if project.project_type not in ('native', 'package', 'alloy'):
+        raise BadRequest(_("Environment variables are only supported for native, package, and alloy projects."))
+
+    if 'env_vars' not in request.POST or request.POST['env_vars'] in ('', 'null'):
+        return {'env_vars': _serialize_env_vars(project)}
+
+    try:
+        entries = json.loads(request.POST['env_vars'])
+    except json.JSONDecodeError as e:
+        raise BadRequest(_("Invalid JSON in 'env_vars': %s") % str(e))
+
+    if not isinstance(entries, list):
+        raise BadRequest(_("env_vars must be a list"))
+
+    existing = {ev.key: ev for ev in project.env_vars.all()}
+    seen_keys = set()
+    new_vars = []
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise BadRequest(_("Each env var entry must be an object."))
+        try:
+            key = (entry.get('key') or '').strip()
+            value = entry.get('value', '')
+        except AttributeError:
+            raise BadRequest(_("Invalid field value in env var entry."))
+        if not key:
+            continue
+        if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', key):
+            raise BadRequest(_("Invalid env var name: '%s'. Must start with a letter or underscore and contain only alphanumeric characters and underscores.") % key)
+        if key in seen_keys:
+            raise BadRequest(_("Duplicate env var key: '%s'") % key)
+        seen_keys.add(key)
+
+        if value == ENV_VAR_MASK and key in existing:
+            new_vars.append(EnvironmentVariable(project=project, key=key, encrypted_value=existing[key].encrypted_value))
+        elif value != ENV_VAR_MASK and value is not None:
+            new_vars.append(EnvironmentVariable(project=project, key=key, encrypted_value=encrypt_value(value)))
+
+    try:
+        with transaction.atomic():
+            project.env_vars.all().delete()
+            for ev in new_vars:
+                ev.save()
+    except IntegrityError as e:
+        raise BadRequest(str(e))
+
+    return {'env_vars': _serialize_env_vars(project)}
 
 
 @require_POST
