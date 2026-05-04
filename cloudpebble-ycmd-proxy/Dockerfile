@@ -1,23 +1,24 @@
-FROM python:3.11-slim-bookworm AS ycmd-builder
+FROM python:3.12-slim-bookworm AS ycmd-builder
 
 ARG PEBBLE_SDK_VERSION
+ARG NODE_VERSION=16.20.2
 
 # Build dependencies for ycmd with clang-completer
 RUN apt-get update && apt-get install -y \
   cmake build-essential libncurses-dev git \
   && rm -rf /var/lib/apt/lists/*
 
-# Clone and build ycmd (ycm-core fork, Python 3 compatible)
+# Clone and build ycmd
 RUN git clone https://github.com/ycm-core/ycmd.git /ycmd && \
   cd /ycmd && \
-  git reset --hard 6297cad7dfffd2a117275b4fe8a867581b4ab236 && \
   git submodule update --init --recursive && \
   python3 build.py --clang-completer --force-sudo
 
 # --- Runtime stage ---
-FROM python:3.11-slim-bookworm
+FROM python:3.12-slim-bookworm
 
 ARG PEBBLE_SDK_VERSION
+ARG NODE_VERSION=16.20.2
 
 # Runtime deps
 RUN apt-get update && apt-get install -y \
@@ -32,7 +33,7 @@ RUN curl -o /tmp/arm-cs-tools.tar https://cloudpebble-vagrant.s3.amazonaws.com/a
   tar -xf /tmp/arm-cs-tools.tar -C / && rm /tmp/arm-cs-tools.tar
 
 # Node.js 16.x (for pebble npm dependencies)
-ENV NODE_VERSION=16.20.2 NPM_CONFIG_LOGLEVEL=info
+ENV NODE_VERSION=${NODE_VERSION} NPM_CONFIG_LOGLEVEL=info
 RUN curl -SLO "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.gz" \
   && tar -xzf "node-v$NODE_VERSION-linux-x64.tar.gz" -C /usr/local --strip-components=1 \
   && rm "node-v$NODE_VERSION-linux-x64.tar.gz"

@@ -1,0 +1,24 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build and run tests
+        run: |
+          sed -i 's|^NGINX_PORT=.*|NGINX_PORT=8080|' .env
+          sed -i 's|^PUBLIC_URL=.*|PUBLIC_URL=http://localhost:8080|' .env
+          docker compose build
+          docker compose up -d
+          # Wait for web to be ready
+          sleep 10
+          docker compose exec -T web /usr/local/bin/python3 manage.py test
+        timeout-minutes: 30

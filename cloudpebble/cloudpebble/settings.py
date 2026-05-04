@@ -187,7 +187,19 @@ BOWER_INSTALLED_APPS = (
 )
 
 # Make this unique, and don't share it with anybody.
-SECRET_KEY = _environ['SECRET_KEY']
+_secret_key_path = os.environ.get('SECRET_KEY_FILE', '/data/secret_key.txt')
+
+if _environ.get('SECRET_KEY'):
+    SECRET_KEY = _environ['SECRET_KEY']
+elif os.path.exists(_secret_key_path):
+    with open(_secret_key_path, 'r') as _f:
+        SECRET_KEY = _f.read().strip()
+else:
+    import secrets
+    SECRET_KEY = secrets.token_urlsafe(50)
+    with open(_secret_key_path, 'w') as _f:
+        _f.write(SECRET_KEY)
+    os.chmod(_secret_key_path, 0o600)
 
 # List of callables that know how to import templates from various sources.
 TEMPLATE_LOADERS = (
@@ -443,7 +455,7 @@ YCMD_PUBLIC_URL = _environ.get('YCMD_PUBLIC_URL', None) or None
 COMPLETION_CERTS = _environ.get('COMPLETION_CERTS', os.getcwd() + '/completion-certs.crt')
 
 QEMU_URLS = _environ.get('QEMU_URLS', 'http://qemu/').split(',')
-QEMU_PUBLIC_URL = _environ.get('QEMU_PUBLIC_URL', None) or None
+QEMU_PUBLIC_URL = _environ.get('QEMU_PUBLIC_URL', None) or _public_url or None
 QEMU_LAUNCH_AUTH_HEADER = _environ.get('QEMU_LAUNCH_AUTH_HEADER', 'secret')
 QEMU_LAUNCH_TIMEOUT = int(_environ.get('QEMU_LAUNCH_TIMEOUT', 25))
 
