@@ -26,6 +26,8 @@ RUN sed -i 's|--disable-nettle||' build-dist.sh && bash build-dist.sh
 # manylinux x86_64 wheels. On Apple Silicon this runs via Rosetta.
 FROM --platform=linux/amd64 python:3.11-slim-bookworm
 
+ARG PEBBLE_SDK_VERSION
+
 # Runtime libs for the QEMU 10 Pebble fork (SDL-linked; fork disables
 # gnutls and fdt, so those are dropped from the previous image).
 RUN apt-get update && apt-get install -y --no-install-recommends \

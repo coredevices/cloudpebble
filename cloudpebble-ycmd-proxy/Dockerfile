@@ -17,6 +17,8 @@ RUN git clone https://github.com/ycm-core/ycmd.git /ycmd && \
 # --- Runtime stage ---
 FROM python:3.11-slim-bookworm
 
+ARG PEBBLE_SDK_VERSION
+
 # Runtime deps
 RUN apt-get update && apt-get install -y \
   libncurses6 curl git bzip2 \
