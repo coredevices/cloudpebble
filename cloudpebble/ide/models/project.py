@@ -228,7 +228,7 @@ class Project(IdeModel):
             try:
                 parse_sdk_version(self.app_version_label)
             except ValueError:
-                raise ValidationError(_("Invalid version string. Versions should be major[.minor]."))
+                raise ValidationError(_("Invalid version string. Versions should be major[.minor[.patch]]."))
         if self.project_type == 'package':
             try:
                 parse_semver(self.app_version_label)
