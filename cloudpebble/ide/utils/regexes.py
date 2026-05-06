@@ -5,7 +5,8 @@ class RegexHolder(object):
     regex_dictionary = {
         # Match major[.minor[.patch]], where each part is between 0 and 255 with no leading 0s.
         # Historical key name; despite the name this is used to validate Pebble app version labels.
-        'sdk_version': r'^(0|[1-9]\d?|1\d{2}|2[0-4]\d|25[0-5])(?:\.(0|[1-9]\d?|1\d{2}|2[0-4]\d|25[0-5])(?:\.(0|[1-9]\d?|1\d{2}|2[0-4]\d|25[0-5]))?)?$',
+        # 0[.0][.0] - 255[.255][.255]: (0 or 1-9 or 10-99 or 100-199 or 200-249 or 250-255), with optional .0-.255, and another optional .0-.255
+        'sdk_version': r'^(0|[1-9][0-9]?|1[0-9][0-9]|2[0-4][0-9]|25[0-5])(\.(0|[1-9][0-9]?|1[0-9][0-9]|2[0-4][0-9]|25[0-5]))?(\.(0|[1-9][0-9]?|1[0-9][0-9]|2[0-4][0-9]|25[0-5]))?$',
 
         # Match x.y.z, each a number (tolerate leading zeros for real-world Pebble projects)
         'semver': r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})$',
