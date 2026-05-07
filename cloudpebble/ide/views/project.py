@@ -24,7 +24,7 @@ def view_project(request, project_id):
     if project.app_uuid is None:
         project.app_uuid = generate_half_uuid()
     if project.app_company_name is None:
-        project.app_company_name = request.user.username
+        project.app_company_name = "none"
     if project.app_short_name is None:
         project.app_short_name = project.name
     if project.app_long_name is None:
