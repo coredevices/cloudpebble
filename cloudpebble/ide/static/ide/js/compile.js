@@ -598,6 +598,20 @@ CloudPebble.Compile = (function() {
         }
     }
 
+    var show_reboot_prompt = function(errorMessage, kind, build) {
+        var rebootModal = $('#emulator-reboot-prompt');
+        rebootModal.find('.reboot-error-message').text(errorMessage);
+        rebootModal.find('#reboot-retry-btn').off('click').on('click', function() {
+            rebootModal.modal('hide');
+            SharedPebble.reboot().then(function() {
+                return install_on_watch(kind, build);
+            }).catch(function(err) {
+                console.warn('reboot & retry failed:', err);
+            });
+        });
+        rebootModal.modal('show');
+    };
+
     var install_on_watch = function(kind, build) {
         var installBuild = build || mLastBuild;
         if(!installBuild || !installBuild.download || !installBuild.sizes) {
@@ -717,6 +731,13 @@ CloudPebble.Compile = (function() {
                 modal.find('.progress').addClass('progress-danger').removeClass('progress-striped');
                 throw error;
             });
+        }).catch(function(error) {
+            if (SharedPebble.isVirtual() && error && error.message &&
+                error.message.indexOf('rebooting') !== -1) {
+                show_reboot_prompt(error.message, kind, installBuild);
+            } else {
+                throw error;
+            }
         });
     };
 

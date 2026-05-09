@@ -322,6 +322,13 @@ var SharedPebble = new (function() {
         });
     };
 
+    this.reboot = function() {
+        var kind = mConnectionType;
+        return this.disconnect(true).then(function() {
+            return self.getPebble(kind);
+        });
+    };
+
     this.isVirtual = function() {
         return mPebble && !!(mConnectionType & ConnectionType.Qemu);
     };

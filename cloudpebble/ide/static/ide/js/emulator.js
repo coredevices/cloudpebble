@@ -10,6 +10,7 @@ CloudPebble.Emulator = new (function() {
     function handleShown(e) {
         var popup = $('.emulator-config');
         popup.find('.emu-app-config').click(doAppConfig);
+        popup.find('.emu-reboot').click(doReboot);
         popup.find('.emu-shut-down').click(doShutdown);
         popup.find('.emu-sensors').click(doSensors);
         popup.find('.battery-level').on('input', setBatteryState).val(self._batteryLevel);
@@ -67,7 +68,8 @@ CloudPebble.Emulator = new (function() {
             '</div>' +
             '<button class="btn emu-app-config">App Config</button> ' +
             '<button class="btn emu-sensors">Sensors</button> ' +
-            '<button class="btn btn-danger emu-shut-down">Shut down</button>' +
+            '<button class="btn btn-warning emu-reboot">Reboot</button> ' +
+            '<button class="btn btn-danger emu-shut-down" style="margin-top:4px">Shut down</button>' +
             '</form>';
     }
 
@@ -79,6 +81,18 @@ CloudPebble.Emulator = new (function() {
             });
         }
         self.element.popover('hide');
+    }
+
+    function doReboot(e) {
+        e.preventDefault();
+        self.element.popover('hide');
+        SharedPebble.reboot().then(function() {
+            if (CloudPebble.Compile && CloudPebble.Compile.DoInstall) {
+                return CloudPebble.Compile.DoInstall();
+            }
+        }).catch(function(err) {
+            console.warn('reboot failed:', err);
+        });
     }
 
     function doShutdown(e) {

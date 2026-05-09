@@ -323,6 +323,19 @@ html, body {
         </div>
     </div>
 </div>
+<!-- Emulator reboot prompt -->
+<div id="emulator-reboot-prompt" class="modal hide fade" tabindex="-1" role="dialog">
+    <div class="modal-header">
+        <h3>{% trans 'Reboot Emulator?' %}</h3>
+    </div>
+    <div class="modal-body">
+        <p class="reboot-error-message"></p>
+    </div>
+    <div class="modal-footer">
+        <button class="btn" data-dismiss="modal" id="reboot-dismiss-btn">{% trans 'Dismiss' %}</button>
+        <button class="btn btn-warning" id="reboot-retry-btn">{% trans 'Reboot &amp; Retry' %}</button>
+    </div>
+</div>
 <!-- Modal warning prompt (used by SharedPebble disconnect) -->
 <div id="modal-warning-prompt" class="modal hide fade" tabindex="-1" role="dialog">
     <div class="modal-header">
