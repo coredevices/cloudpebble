@@ -268,7 +268,7 @@
                         data: URL_BOOT_IMG[mPlatform].url
                     };
                     mRFB.get_display().clear();
-                    mRFB.connect(mHost, mAPIPort, (mToken || '').substr(0, 8), 'qemu/' + mInstanceID + '/ws/vnc');
+                    mRFB.connect(mHost, mAPIPort, mToken.substr(0, 8), 'qemu/' + mInstanceID + '/ws/vnc');
                 });
             });
         }
