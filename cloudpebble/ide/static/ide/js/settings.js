@@ -109,7 +109,7 @@ CloudPebble.Settings = (function() {
             }
             // This is not an appropriate use of a regex, but we have to have it for the HTML5 pattern attribute anyway,
             // so we may as well reuse the effort here.
-            // It validates that the format matches x[.y] with x, y in [0, 255].
+            // It validates that the format matches x[.y[.z]] with each part in [0, 255].
             if(CloudPebble.ProjectInfo.type != 'package' && !version_label.match(REGEXES.sdk_version)) {
                 throw new Error(gettext("You must specify a valid version number."));
             }
