@@ -41,11 +41,14 @@ jobs:
         run: cat code-coverage-results.md >> $GITHUB_STEP_SUMMARY
 
   run-tests:
+    permissions:
+      pull-requests: write
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Build and run tests
+      - name: Build and run tests with coverage
         run: |
           sed -i 's|^NGINX_PORT=.*|NGINX_PORT=8080|' .env
           sed -i 's|^PUBLIC_URL=.*|PUBLIC_URL=http://localhost:8080|' .env
@@ -53,5 +56,21 @@ jobs:
           docker compose up -d
           # Wait for web to be ready
           sleep 10
-          docker compose exec -T web /usr/local/bin/python3 manage.py test
-        timeout-minutes: 30
+          docker compose exec -T web coverage run manage.py test
+          docker compose exec -T web coverage xml -o /tmp/python-coverage.xml
+          docker compose cp web:/tmp/python-coverage.xml python-coverage.xml
+      - name: Python Code Coverage Summary
+        uses: irongut/CodeCoverageSummary@v1.3.0
+        with:
+          filename: python-coverage.xml
+          badge: true
+          format: markdown
+          output: both
+      - name: Add Coverage PR Comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        if: github.event_name == 'pull_request'
+        with:
+          recreate: true
+          path: python-coverage-results.md
+      - name: Write to Job Summary
+        run: cat python-coverage-results.md >> $GITHUB_STEP_SUMMARY

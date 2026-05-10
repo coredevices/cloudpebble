@@ -1,0 +1,12 @@
+[run]
+source = /code
+omit =
+    */migrations/*
+    */tests/*
+    */test_*.py
+    manage.py
+    */wsgi.py
+    */asgi.py
+
+[xml]
+output = /tmp/python-coverage.xml
