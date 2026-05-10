@@ -1,36 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { JSDOM } from 'jsdom';
-import vm from 'vm';
-import fs from 'fs';
-import path from 'path';
+import { describe, it, expect, vi } from 'vitest';
+import { shouldShowPrompt, showRebootPrompt } from '../compile-reboot.js';
 
-function createEnv() {
-    const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', { url: 'http://localhost' });
-    const w = dom.window;
-
-    w.CloudPebble = {};
-
-    const $ = vi.fn();
-    $.fn = {};
-    w.$ = w.jQuery = $;
-
-    return { window: w, $ };
-}
-
-function loadCompileReboot(window) {
-    const code = fs.readFileSync(path.resolve(__dirname, '../compile-reboot.js'), 'utf8');
-    vm.runInNewContext(code, window);
-}
-
-describe('CloudPebble.CompileReboot.shouldShowPrompt', () => {
-    let shouldShowPrompt;
-
-    beforeEach(() => {
-        const { window } = createEnv();
-        loadCompileReboot(window);
-        shouldShowPrompt = window.CloudPebble.CompileReboot.shouldShowPrompt;
-    });
-
+describe('shouldShowPrompt', () => {
     it('returns true when error message contains "rebooting" and device is virtual', () => {
         expect(shouldShowPrompt(new Error('Phone is rebooting'), true)).toBe(true);
     });
@@ -60,16 +31,7 @@ describe('CloudPebble.CompileReboot.shouldShowPrompt', () => {
     });
 });
 
-describe('CloudPebble.CompileReboot.showRebootPrompt', () => {
-    let $, window;
-
-    beforeEach(() => {
-        const env = createEnv();
-        $ = env.$;
-        window = env.window;
-        loadCompileReboot(window);
-    });
-
+describe('showRebootPrompt', () => {
     function makeModal() {
         const errorMsgEl = { text: vi.fn() };
         const retryBtn = { off: vi.fn(() => retryBtn), on: vi.fn(() => retryBtn) };
@@ -89,9 +51,7 @@ describe('CloudPebble.CompileReboot.showRebootPrompt', () => {
         const rebootFn = vi.fn(() => Promise.resolve());
         const installFn = vi.fn(() => Promise.resolve());
 
-        window.CloudPebble.CompileReboot.showRebootPrompt(
-            'Phone is rebooting', 'basalt', { id: 1 }, rebootFn, installFn, modal
-        );
+        showRebootPrompt('Phone is rebooting', 'basalt', { id: 1 }, rebootFn, installFn, modal);
 
         expect(errorMsgEl.text).toHaveBeenCalledWith('Phone is rebooting');
         expect(modal.modal).toHaveBeenCalledWith('show');
@@ -102,9 +62,7 @@ describe('CloudPebble.CompileReboot.showRebootPrompt', () => {
         const rebootFn = vi.fn(() => Promise.resolve());
         const installFn = vi.fn(() => Promise.resolve());
 
-        window.CloudPebble.CompileReboot.showRebootPrompt(
-            'err', 'basalt', { id: 1 }, rebootFn, installFn, modal
-        );
+        showRebootPrompt('err', 'basalt', { id: 1 }, rebootFn, installFn, modal);
 
         expect(retryBtn.off).toHaveBeenCalledWith('click');
         expect(retryBtn.on).toHaveBeenCalledWith('click', expect.any(Function));
@@ -122,9 +80,7 @@ describe('CloudPebble.CompileReboot.showRebootPrompt', () => {
         const installFn = vi.fn(() => Promise.resolve());
         const build = { id: 42, download: '/build/42' };
 
-        window.CloudPebble.CompileReboot.showRebootPrompt(
-            'rebooting', 'basalt', build, rebootFn, installFn, modal
-        );
+        showRebootPrompt('rebooting', 'basalt', build, rebootFn, installFn, modal);
 
         await clickHandler();
 
