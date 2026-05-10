@@ -721,14 +721,14 @@ CloudPebble.Compile = (function() {
             });
         }).catch(function(error) {
             if (CloudPebble.CompileReboot.shouldShowPrompt(error, SharedPebble.isVirtual())) {
-                CloudPebble.CompileReboot.showRebootPrompt(error.message, kind, installBuild, SharedPebble.reboot, install_on_watch);
+                CloudPebble.CompileReboot.showRebootPrompt(error.message, kind, installBuild, SharedPebble.reboot, install_on_watch, $('#emulator-reboot-prompt'));
             } else {
                 throw error;
             }
         });
     };
 
-    var show_clear_logs_prompt = function() {
+var show_clear_logs_prompt = function() {
         CloudPebble.Prompts.Confirm(gettext("Clear all app logs?"), gettext("This cannot be undone."), function() {
             ga('send', 'event', 'logs', 'delete');
             //CloudPebble.Analytics.addEvent('app_log_clear', {log_length: mPreviousDisplayLogs.length, virtual: SharedPebble.isVirtual()});
@@ -950,22 +950,3 @@ CloudPebble.Compile = (function() {
         }
     };
 })();
-
-CloudPebble.CompileReboot = {
-    shouldShowPrompt: function(error, isVirtual) {
-        return isVirtual && !!error && !!error.message && error.message.indexOf('rebooting') !== -1;
-    },
-    showRebootPrompt: function(errorMessage, kind, build, rebootFn, installFn) {
-        var rebootModal = $('#emulator-reboot-prompt');
-        rebootModal.find('.reboot-error-message').text(errorMessage);
-        rebootModal.find('#reboot-retry-btn').off('click').on('click', function() {
-            rebootModal.modal('hide');
-            rebootFn().then(function() {
-                return installFn(kind, build);
-            }).catch(function(err) {
-                console.warn('reboot & retry failed:', err);
-            });
-        });
-        rebootModal.modal('show');
-    }
-};

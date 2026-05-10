@@ -1,36 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { JSDOM } from 'jsdom';
+import vm from 'vm';
 import fs from 'fs';
 import path from 'path';
 
 function createEnv() {
     const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', { url: 'http://localhost' });
     const w = dom.window;
+
+    w.CloudPebble = {};
+
     const $ = vi.fn();
     $.fn = {};
     w.$ = w.jQuery = $;
-    w._ = { extend: vi.fn((obj) => obj) };
-    w.Backbone = { Events: {} };
-    w.gettext = (s) => s;
-    w.ConnectionType = {
-        None: 0, Phone: 1, Qemu: 2,
-        QemuAplite: 6, QemuBasalt: 10, QemuChalk: 18,
-        QemuDiorite: 34, QemuEmery: 66, QemuGabbro: 130, QemuFlint: 258
-    };
-    w.ConnectionPlatformNames = {
-        2: 'aplite', 6: 'aplite', 10: 'basalt', 18: 'chalk',
-        34: 'diorite', 66: 'emery', 130: 'gabbro', 258: 'flint'
-    };
-    w.CloudPebble = {};
-    w.SharedPebble = null;
+
     return { window: w, $ };
 }
 
-function loadScript(window, filePath) {
-    const code = fs.readFileSync(path.resolve(__dirname, filePath), 'utf8');
-    const script = window.document.createElement('script');
-    script.textContent = code;
-    window.document.head.appendChild(script);
+function loadCompileReboot(window) {
+    const code = fs.readFileSync(path.resolve(__dirname, '../compile-reboot.js'), 'utf8');
+    vm.runInNewContext(code, window);
 }
 
 describe('CloudPebble.CompileReboot.shouldShowPrompt', () => {
@@ -38,11 +27,7 @@ describe('CloudPebble.CompileReboot.shouldShowPrompt', () => {
 
     beforeEach(() => {
         const { window } = createEnv();
-        window.CloudPebble.CompileReboot = {
-            shouldShowPrompt: function(error, isVirtual) {
-                return isVirtual && !!error && !!error.message && error.message.indexOf('rebooting') !== -1;
-            }
-        };
+        loadCompileReboot(window);
         shouldShowPrompt = window.CloudPebble.CompileReboot.shouldShowPrompt;
     });
 
@@ -76,141 +61,72 @@ describe('CloudPebble.CompileReboot.shouldShowPrompt', () => {
 });
 
 describe('CloudPebble.CompileReboot.showRebootPrompt', () => {
-    let $, modal, retryBtn, errorMessageEl, window;
+    let $, window;
 
     beforeEach(() => {
         const env = createEnv();
         $ = env.$;
         window = env.window;
-        errorMessageEl = { text: vi.fn() };
-        retryBtn = { off: vi.fn().mockReturnThis(), on: vi.fn().mockReturnThis() };
-        modal = {
-            find: vi.fn((selector) => {
-                if (selector === '.reboot-error-message') return errorMessageEl;
-                if (selector === '#reboot-retry-btn') return retryBtn;
+        loadCompileReboot(window);
+    });
+
+    function makeModal() {
+        const errorMsgEl = { text: vi.fn() };
+        const retryBtn = { off: vi.fn(() => retryBtn), on: vi.fn(() => retryBtn) };
+        const modal = {
+            find: vi.fn((sel) => {
+                if (sel === '.reboot-error-message') return errorMsgEl;
+                if (sel === '#reboot-retry-btn') return retryBtn;
                 return null;
             }),
             modal: vi.fn()
         };
-
-        $.mockImplementation((selector) => {
-            if (selector === '#emulator-reboot-prompt') return modal;
-            return null;
-        });
-    });
+        return { modal, errorMsgEl, retryBtn };
+    }
 
     it('sets the error message text on the modal', () => {
-        window.CloudPebble.CompileReboot = {
-            shouldShowPrompt: function() {},
-            showRebootPrompt: function(errorMessage, kind, build, rebootFn, installFn) {
-                var rebootModal = $('#emulator-reboot-prompt');
-                rebootModal.find('.reboot-error-message').text(errorMessage);
-                rebootModal.find('#reboot-retry-btn').off('click').on('click', function() {
-                    rebootModal.modal('hide');
-                    rebootFn().then(function() {
-                        return installFn(kind, build);
-                    }).catch(function(err) {
-                        console.warn('reboot & retry failed:', err);
-                    });
-                });
-                rebootModal.modal('show');
-            }
-        };
+        const { modal, errorMsgEl } = makeModal();
+        const rebootFn = vi.fn(() => Promise.resolve());
+        const installFn = vi.fn(() => Promise.resolve());
 
-        window.CloudPebble.CompileReboot.showRebootPrompt('Phone is rebooting', 'basalt', { id: 1 }, vi.fn(), vi.fn());
+        window.CloudPebble.CompileReboot.showRebootPrompt(
+            'Phone is rebooting', 'basalt', { id: 1 }, rebootFn, installFn, modal
+        );
 
-        expect(errorMessageEl.text).toHaveBeenCalledWith('Phone is rebooting');
+        expect(errorMsgEl.text).toHaveBeenCalledWith('Phone is rebooting');
+        expect(modal.modal).toHaveBeenCalledWith('show');
     });
 
-    it('unbinds previous click handlers from retry button before binding new one', () => {
-        window.CloudPebble.CompileReboot = {
-            shouldShowPrompt: function() {},
-            showRebootPrompt: function(errorMessage, kind, build, rebootFn, installFn) {
-                var rebootModal = $('#emulator-reboot-prompt');
-                rebootModal.find('.reboot-error-message').text(errorMessage);
-                rebootModal.find('#reboot-retry-btn').off('click').on('click', function() {
-                    rebootModal.modal('hide');
-                    rebootFn().then(function() {
-                        return installFn(kind, build);
-                    }).catch(function(err) {
-                        console.warn('reboot & retry failed:', err);
-                    });
-                });
-                rebootModal.modal('show');
-            }
-        };
+    it('unbinds previous click handlers and binds new one', () => {
+        const { modal, retryBtn } = makeModal();
+        const rebootFn = vi.fn(() => Promise.resolve());
+        const installFn = vi.fn(() => Promise.resolve());
 
-        window.CloudPebble.CompileReboot.showRebootPrompt('err', 'basalt', { id: 1 }, vi.fn(), vi.fn());
+        window.CloudPebble.CompileReboot.showRebootPrompt(
+            'err', 'basalt', { id: 1 }, rebootFn, installFn, modal
+        );
 
         expect(retryBtn.off).toHaveBeenCalledWith('click');
         expect(retryBtn.on).toHaveBeenCalledWith('click', expect.any(Function));
     });
 
-    it('calls modal("show") to display the prompt', () => {
-        window.CloudPebble.CompileReboot = {
-            shouldShowPrompt: function() {},
-            showRebootPrompt: function(errorMessage, kind, build, rebootFn, installFn) {
-                var rebootModal = $('#emulator-reboot-prompt');
-                rebootModal.find('.reboot-error-message').text(errorMessage);
-                rebootModal.find('#reboot-retry-btn').off('click').on('click', function() {
-                    rebootModal.modal('hide');
-                    rebootFn().then(function() {
-                        return installFn(kind, build);
-                    }).catch(function(err) {
-                        console.warn('reboot & retry failed:', err);
-                    });
-                });
-                rebootModal.modal('show');
-            }
-        };
-
-        window.CloudPebble.CompileReboot.showRebootPrompt('err', 'basalt', { id: 1 }, vi.fn(), vi.fn());
-
-        expect(modal.modal).toHaveBeenCalledWith('show');
-    });
-
-    it('retry button click hides modal, calls rebootFn, then installFn', async () => {
-        window.CloudPebble.CompileReboot = {
-            shouldShowPrompt: function() {},
-            showRebootPrompt: function(errorMessage, kind, build, rebootFn, installFn) {
-                var rebootModal = $('#emulator-reboot-prompt');
-                rebootModal.find('.reboot-error-message').text(errorMessage);
-                rebootBtn_off_click = null;
-                rebootModal.find('#reboot-retry-btn').off('click').on('click', function handler() {
-                    rebootBtn_off_click = handler;
-                });
-                rebootModal.modal('show');
-            }
-        };
-
-        let retryClickHandler = null;
-        retryBtn.on = vi.fn((event, handler) => {
-            if (event === 'click') retryClickHandler = handler;
+    it('retry click hides modal, calls rebootFn, then installFn', async () => {
+        const { modal, retryBtn } = makeModal();
+        let clickHandler = null;
+        retryBtn.on = vi.fn((evt, fn) => {
+            if (evt === 'click') clickHandler = fn;
             return retryBtn;
         });
-
-        window.CloudPebble.CompileReboot = {
-            shouldShowPrompt: function() {},
-            showRebootPrompt: function(errorMessage, kind, build, rebootFn, installFn) {
-                var rebootModal = $('#emulator-reboot-prompt');
-                rebootModal.find('.reboot-error-message').text(errorMessage);
-                rebootModal.find('#reboot-retry-btn').off('click').on('click', function() {
-                    rebootModal.modal('hide');
-                    rebootFn().then(function() {
-                        return installFn(kind, build);
-                    }).catch(function(err) {});
-                });
-                rebootModal.modal('show');
-            }
-        };
 
         const rebootFn = vi.fn(() => Promise.resolve());
         const installFn = vi.fn(() => Promise.resolve());
         const build = { id: 42, download: '/build/42' };
 
-        window.CloudPebble.CompileReboot.showRebootPrompt('rebooting', 'basalt', build, rebootFn, installFn);
+        window.CloudPebble.CompileReboot.showRebootPrompt(
+            'rebooting', 'basalt', build, rebootFn, installFn, modal
+        );
 
-        await retryClickHandler();
+        await clickHandler();
 
         expect(modal.modal).toHaveBeenCalledWith('hide');
         expect(rebootFn).toHaveBeenCalled();
