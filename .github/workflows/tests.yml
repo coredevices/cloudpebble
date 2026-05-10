@@ -37,6 +37,7 @@ jobs:
         with:
           recreate: true
           path: code-coverage-results.md
+          header: js-coverage
       - name: Write to Job Summary
         run: cat code-coverage-results.md >> $GITHUB_STEP_SUMMARY
 
@@ -71,6 +72,7 @@ jobs:
         if: github.event_name == 'pull_request'
         with:
           recreate: true
-          path: python-coverage-results.md
+          path: code-coverage-results.md
+          header: python-coverage
       - name: Write to Job Summary
-        run: cat python-coverage-results.md >> $GITHUB_STEP_SUMMARY
+        run: cat code-coverage-results.md >> $GITHUB_STEP_SUMMARY
