@@ -1,4 +1,5 @@
 import base64
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
@@ -317,6 +318,48 @@ class GitProjectItem(BaseProjectItem):
         return self.git_item.path
 
 
+PEBBLEJS_BUILTIN_RESOURCES = frozenset({
+    'MONO_FONT_14', 'IMAGE_MENU_ICON', 'IMAGE_LOGO_SPLASH', 'IMAGE_TILE_SPLASH',
+})
+
+
+def validate_resources_against_tree(paths_notags, manifest, project):
+    """Validate that all resources referenced in the manifest exist in the tree.
+
+    Given a set of tag-stripped paths from a git tree and a parsed manifest dict,
+    checks that every resource file listed in the manifest is present in the tree.
+    Skips built-in Pebble.js resources that don't need to be in the repo.
+
+    Returns the manifest's media list for further processing.
+
+    Raises Exception if a required resource is missing.
+    """
+    resource_root = project.resources_path + '/'
+    manifest_resources = manifest.get('resources', {}).get('media', [])
+    project_type = manifest.get('projectType', 'native')
+
+    for resource in manifest_resources:
+        path = resource_root + resource['file']
+        if project_type == 'pebblejs' and resource['name'] in PEBBLEJS_BUILTIN_RESOURCES:
+            continue
+        if path not in paths_notags:
+            raise Exception("Resource %s not found in repo." % path)
+
+    return manifest_resources
+
+
+def parse_manifest_from_tree(tree_items, project):
+    """Find and parse the manifest from a git tree, returning (root, manifest_dict).
+
+    Takes a list of BaseProjectItem instances and a Project. Returns a tuple of
+    (project_root_path, manifest_dict). Raises ValueError or
+    InvalidProjectArchiveException if the tree has no valid manifest.
+    """
+    root, manifest_item = find_project_root_and_manifest(tree_items)
+    manifest = json.loads(manifest_item.read())
+    return root, manifest
+
+
 @git_auth_check
 def github_pull(user, project):
     g = get_github(user)
@@ -335,85 +378,93 @@ def github_pull(user, project):
         # Nothing to do.
         return False
 
-    commit = repo.get_git_commit(branch.commit.sha)
-    tree = repo.get_git_tree(commit.tree.sha, recursive=True)
+    # Start the zip download in parallel with validation.
+    # We've already confirmed the commit differs, so the zip will be needed.
+    # Pin to the commit SHA so a branch update between tree fetch and archive
+    # fetch can't slip a different tree past us.
+    zip_url = repo.get_archive_link('zipball', branch.commit.sha)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        zip_future = executor.submit(urlopen, zip_url, timeout=30)
 
-    paths = {x.path: x for x in tree.tree}
-    paths_notags = {get_root_path(x) for x in paths}
+        commit = repo.get_git_commit(branch.commit.sha)
+        tree = repo.get_git_tree(commit.tree.sha, recursive=True)
 
-    # First try finding the resource map so we don't fail out part-done later.
-    try:
-        root, manifest_item = find_project_root_and_manifest([GitProjectItem(repo, x) for x in tree.tree])
-    except ValueError as e:
-        raise ValueError("In manifest file: %s" % str(e))
+        paths = {x.path: x for x in tree.tree}
+        paths_notags = {get_root_path(x) for x in paths}
 
-    # Parse the manifest the same way do_import_archive does so we make our
-    # pre-flight decisions on the same data the import will use. Reading
-    # manifest.get('resources') / manifest.get('projectType') directly is
-    # wrong for package.json (those live under manifest['pebble']) — the
-    # original code had this bug, which silently disabled the per-resource
-    # existence check below for every package.json project.
-    raw_manifest = json.loads(manifest_item.read())
-    manifest_kind = next((k for k in MANIFEST_KINDS if manifest_item.path.endswith(k)), None)
-    try:
-        manifest_project_options, media, _deps = load_manifest_dict(raw_manifest, manifest_kind)
-    except (InvalidProjectArchiveException, KeyError, ValueError, TypeError) as e:
-        raise Exception("Could not read manifest on branch '%s': %s" % (branch_name, e))
-    incoming_project_type = manifest_project_options.get('project_type', 'native')
+        try:
+            root, manifest_item = find_project_root_and_manifest([GitProjectItem(repo, x) for x in tree.tree])
+        except ValueError as e:
+            raise ValueError("In manifest file: %s" % str(e))
 
-    # resources_path depends on the INCOMING project type, not the current
-    # one — a pull can legitimately change the project type.
-    incoming_resources_path = 'src/resources' if incoming_project_type == 'package' else 'resources'
-    resource_root = root + incoming_resources_path + '/'
+        # Parse the manifest the same way do_import_archive does so we make our
+        # pre-flight decisions on the same data the import will use. Reading
+        # manifest.get('resources') / manifest.get('projectType') directly is
+        # wrong for package.json (those live under manifest['pebble']) — the
+        # original code had this bug, which silently disabled the per-resource
+        # existence check below for every package.json project.
+        raw_manifest = json.loads(manifest_item.read())
+        manifest_kind = next((k for k in MANIFEST_KINDS if manifest_item.path.endswith(k)), None)
+        try:
+            manifest_project_options, media, _deps = load_manifest_dict(raw_manifest, manifest_kind)
+        except (InvalidProjectArchiveException, KeyError, ValueError, TypeError) as e:
+            raise Exception("Could not read manifest on branch '%s': %s" % (branch_name, e))
+        incoming_project_type = manifest_project_options.get('project_type', 'native')
 
-    for resource in media:
-        path = resource_root + resource['file']
-        if incoming_project_type == 'pebblejs' and resource['name'] in {
-            'MONO_FONT_14', 'IMAGE_MENU_ICON', 'IMAGE_LOGO_SPLASH', 'IMAGE_TILE_SPLASH'}:
-            continue
-        if path not in paths_notags:
-            raise Exception("Resource %s not found in repo." % path)
+        # resources_path depends on the INCOMING project type, not the current
+        # one — a pull can legitimately change the project type.
+        incoming_resources_path = 'src/resources' if incoming_project_type == 'package' else 'resources'
+        resource_root = root + incoming_resources_path + '/'
 
-    # Refuse to wipe if the incoming tree has NOTHING importable — no
-    # resources in the manifest AND no source files at any path
-    # SourceFile.get_details_for_path would accept for this project type.
-    # This is the forum-reported failure mode
-    # (https://forum.repebble.com/t/cloudpebble-didnt-use-pull-correctly-from-github/829):
-    # the user pulled from a branch where they'd only uploaded the compiled
-    # .pbw + screenshots via the GitHub web UI, with a package.json whose
-    # `pebble.resources.media` was []. All checks above passed, the wipe
-    # happened, and do_import_archive silently imported zero files.
-    #
-    # This has to fire BEFORE touching the DB: SourceFile/ResourceVariant
-    # post_delete signals flush S3 blobs synchronously, so a later DB
-    # transaction rollback would restore rows pointing at deleted blobs.
-    if project.source_files.exists() or project.resources.exists():
-        has_importable_source = False
-        for tree_path in paths:
-            if not tree_path.startswith(root):
+        for resource in media:
+            path = resource_root + resource['file']
+            if incoming_project_type == 'pebblejs' and resource['name'] in {
+                'MONO_FONT_14', 'IMAGE_MENU_ICON', 'IMAGE_LOGO_SPLASH', 'IMAGE_TILE_SPLASH'}:
                 continue
-            try:
-                SourceFile.get_details_for_path(incoming_project_type, tree_path[len(root):])
-            except (ValueError, KeyError):
-                continue
-            has_importable_source = True
-            break
-        if not media and not has_importable_source:
-            raise Exception(
-                "Refusing to pull from '%s': the branch has no resources in "
-                "its manifest and no source files the importer recognises. "
-                "Pulling would empty your project. Double-check that you're "
-                "pulling from the right branch." % branch_name
-            )
+            if path not in paths_notags:
+                raise Exception("Resource %s not found in repo." % path)
+
+        # Refuse to wipe if the incoming tree has NOTHING importable — no
+        # resources in the manifest AND no source files at any path
+        # SourceFile.get_details_for_path would accept for this project type.
+        # This is the forum-reported failure mode
+        # (https://forum.repebble.com/t/cloudpebble-didnt-use-pull-correctly-from-github/829):
+        # the user pulled from a branch where they'd only uploaded the compiled
+        # .pbw + screenshots via the GitHub web UI, with a package.json whose
+        # `pebble.resources.media` was []. All checks above passed, the wipe
+        # happened, and do_import_archive silently imported zero files.
+        #
+        # This has to fire BEFORE touching the DB: SourceFile/ResourceVariant
+        # post_delete signals flush S3 blobs synchronously, so a later DB
+        # transaction rollback would restore rows pointing at deleted blobs.
+        if project.source_files.exists() or project.resources.exists():
+            has_importable_source = False
+            for tree_path in paths:
+                if not tree_path.startswith(root):
+                    continue
+                try:
+                    SourceFile.get_details_for_path(incoming_project_type, tree_path[len(root):])
+                except (ValueError, KeyError):
+                    continue
+                has_importable_source = True
+                break
+            if not media and not has_importable_source:
+                raise Exception(
+                    "Refusing to pull from '%s': the branch has no resources in "
+                    "its manifest and no source files the importer recognises. "
+                    "Pulling would empty your project. Double-check that you're "
+                    "pulling from the right branch." % branch_name
+                )
+
+        # Collect the zip download (it's been running in parallel).
+        u = zip_future.result()
 
     # Fully download and validate the archive BEFORE touching the database, so
     # an empty/truncated/corrupt stream from GitHub fails loudly without
-    # wiping. Pin the download to the commit SHA we just validated so a
-    # branch update between the tree fetch and the archive fetch can't slip a
-    # different tree past us.
-    zip_url = repo.get_archive_link('zipball', branch.commit.sha)
-    with urlopen(zip_url, timeout=30) as response:
-        archive_bytes = response.read()
+    # wiping. The URL was already pinned to the commit SHA inside the
+    # ThreadPoolExecutor block above.
+    with u:
+        archive_bytes = u.read()
     if not archive_bytes or not zipfile.is_zipfile(BytesIO(archive_bytes)):
         raise Exception("GitHub returned an invalid archive for branch '%s'." % branch_name)
 
