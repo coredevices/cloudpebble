@@ -10,15 +10,12 @@ from ide.tasks import run_compile
 from ide.utils.sdk import dict_to_pretty_json
 from django.test import TestCase
 from django.test.client import Client
-from django.test.utils import setup_test_environment
 from ide.models.user import User
 
 try:
     from django.test import override_settings
 except ImportError:
     from django.test.utils import override_settings
-
-setup_test_environment()
 
 
 # TODO: after moving to Django 1.9, use client.post().json() instead of json.loads(client.post().content)

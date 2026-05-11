@@ -246,3 +246,101 @@ class TestImportLibrary(CloudpebbleTestCase):
         do_import_archive(self.project_id, bundle)
         project = Project.objects.get(pk=self.project_id)
         self.assertSetEqual({f.file_name for f in project.resources.all()}, {'res1.png', 'res2.png'})
+
+
+@mock.patch('ide.models.s3file.s3', fake_s3)
+class TestWipeExisting(CloudpebbleTestCase):
+    def setUp(self):
+        self.login()
+
+    def test_wipe_existing_replaces_source_files(self):
+        """Importing with wipe_existing=True replaces existing source files"""
+        first_bundle = build_bundle({
+            'src/main.c': '// original',
+            'src/utils.c': '// utils',
+            'appinfo.json': make_appinfo()
+        })
+        do_import_archive(self.project_id, first_bundle)
+        project = Project.objects.get(pk=self.project_id)
+        self.assertEqual(project.source_files.count(), 2)
+
+        second_bundle = build_bundle({
+            'src/replaced.c': '// replaced',
+            'appinfo.json': make_appinfo()
+        })
+        do_import_archive(self.project_id, second_bundle, wipe_existing=True)
+        project = Project.objects.get(pk=self.project_id)
+        self.assertEqual(project.source_files.count(), 1)
+        self.assertEqual(project.source_files.first().file_name, 'replaced.c')
+
+    def test_wipe_existing_replaces_resources(self):
+        """Importing with wipe_existing=True replaces existing resources"""
+        first_bundle = build_bundle({
+            'src/main.c': '',
+            'resources/images/blah.png': 'original!',
+            'appinfo.json': make_appinfo(options={
+                'resources': {
+                    'media': [{
+                        'file': 'images/blah.png',
+                        'name': 'IMAGE_BLAH',
+                        'type': 'bitmap'
+                    }]
+                }
+            })
+        })
+        do_import_archive(self.project_id, first_bundle)
+        project = Project.objects.get(pk=self.project_id)
+        self.assertEqual(project.resources.count(), 1)
+
+        second_bundle = build_bundle({
+            'src/main.c': '',
+            'resources/images/new.png': 'new!',
+            'appinfo.json': make_appinfo(options={
+                'resources': {
+                    'media': [{
+                        'file': 'images/new.png',
+                        'name': 'IMAGE_NEW',
+                        'type': 'bitmap'
+                    }]
+                }
+            })
+        })
+        do_import_archive(self.project_id, second_bundle, wipe_existing=True)
+        project = Project.objects.get(pk=self.project_id)
+        self.assertEqual(project.resources.count(), 1)
+        self.assertEqual(project.resources.first().file_name, 'new.png')
+
+    def test_wipe_existing_false_keeps_files(self):
+        """Importing with wipe_existing=False (default) does not delete existing files"""
+        first_bundle = build_bundle({
+            'src/main.c': '// original',
+            'appinfo.json': make_appinfo()
+        })
+        do_import_archive(self.project_id, first_bundle)
+        project = Project.objects.get(pk=self.project_id)
+        self.assertEqual(project.source_files.count(), 1)
+
+        second_bundle = build_bundle({
+            'src/added.c': '// added',
+            'appinfo.json': make_appinfo()
+        })
+        do_import_archive(self.project_id, second_bundle, wipe_existing=False)
+        project = Project.objects.get(pk=self.project_id)
+        self.assertEqual(project.source_files.count(), 2)
+
+    def test_wipe_existing_rolls_back_on_failure(self):
+        """If wipe_existing=True and import fails, original files are preserved"""
+        first_bundle = build_bundle({
+            'src/main.c': '// original',
+            'appinfo.json': make_appinfo()
+        })
+        do_import_archive(self.project_id, first_bundle)
+        project = Project.objects.get(pk=self.project_id)
+        self.assertEqual(project.source_files.count(), 1)
+
+        bad_bundle = b'this is not a valid zip file'
+        with self.assertRaises(Exception):
+            do_import_archive(self.project_id, bad_bundle, wipe_existing=True)
+        project = Project.objects.get(pk=self.project_id)
+        self.assertEqual(project.source_files.count(), 1,
+                         "Original files should be preserved after failed import")
