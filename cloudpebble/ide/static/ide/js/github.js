@@ -104,6 +104,10 @@ CloudPebble.GitHub = (function() {
         }
         pane.find('#github-repo-hook').val(CloudPebble.ProjectInfo.github.auto_pull ? '1' : '0');
         pane.find('#github-repo-build').val(CloudPebble.ProjectInfo.github.auto_build ? '1' : '0');
+        var lastSync = CloudPebble.ProjectInfo.github.last_sync;
+        if(lastSync) {
+            pane.find('#github-last-sync').text(interpolate(gettext('Last synced: %s'), [lastSync]));
+        }
 
         var prompt = $('#github-new-repo-prompt');
         prompt.find('form').submit(function(e) {
@@ -162,7 +166,12 @@ CloudPebble.GitHub = (function() {
                     CloudPebble.Editor.GetUnsavedFiles = function() { return 0; };
                     window.location.reload(true);
                 } else {
-                    show_alert('success', gettext("Pull completed: Nothing to pull."));
+                    var lastSync = CloudPebble.ProjectInfo.github.last_sync;
+                    if(lastSync) {
+                        show_alert('success', interpolate(gettext("Already up to date (last synced %s)."), [lastSync]));
+                    } else {
+                        show_alert('success', gettext("Pull completed: Nothing to pull."));
+                    }
                 }
             });
         };
