@@ -12,6 +12,10 @@ from ide.tasks.git import (
     parse_manifest_from_tree,
     get_root_path,
     PEBBLEJS_BUILTIN_RESOURCES,
+    _infer_resource_kind_from_path,
+    _strip_resource_dir_prefix,
+    _fetch_file_content,
+    _remove_file_by_path,
 )
 from ide.utils.project import BaseProjectItem
 
@@ -283,3 +287,192 @@ class ParseManifestFromTreeTest(TestCase):
         from ide.utils.project import InvalidProjectArchiveException
         with self.assertRaises(InvalidProjectArchiveException):
             parse_manifest_from_tree(items, None)
+
+
+class InferResourceKindTest(TestCase):
+    def test_png_maps_to_png(self):
+        self.assertEqual(_infer_resource_kind_from_path('icon.png'), 'png')
+
+    def test_pbi_maps_to_pbi(self):
+        self.assertEqual(_infer_resource_kind_from_path('image.pbi'), 'pbi')
+
+    def test_ttf_maps_to_font(self):
+        self.assertEqual(_infer_resource_kind_from_path('font.ttf'), 'font')
+
+    def test_otf_maps_to_font(self):
+        self.assertEqual(_infer_resource_kind_from_path('font.otf'), 'font')
+
+    def test_unknown_maps_to_raw(self):
+        self.assertEqual(_infer_resource_kind_from_path('data.bin'), 'raw')
+
+    def test_jpg_maps_to_raw(self):
+        self.assertEqual(_infer_resource_kind_from_path('photo.jpg'), 'raw')
+
+
+class StripResourceDirPrefixTest(TestCase):
+    def test_strips_images_prefix(self):
+        self.assertEqual(_strip_resource_dir_prefix('images/icon.png'), 'icon.png')
+
+    def test_strips_fonts_prefix(self):
+        self.assertEqual(_strip_resource_dir_prefix('fonts/mono.ttf'), 'mono.ttf')
+
+    def test_strips_data_prefix(self):
+        self.assertEqual(_strip_resource_dir_prefix('data/config.json'), 'config.json')
+
+    def test_no_prefix_returns_unchanged(self):
+        self.assertEqual(_strip_resource_dir_prefix('icon.png'), 'icon.png')
+
+    def test_custom_prefixes(self):
+        prefixes = {'images/', 'fonts/', 'data/'}
+        self.assertEqual(_strip_resource_dir_prefix('images/icon.png', prefixes), 'icon.png')
+
+
+class FetchFileContentTest(TestCase):
+    def _make_change(self, filename, sha=None):
+        change = mock.MagicMock()
+        change.filename = filename
+        change.sha = sha
+        return change
+
+    def test_returns_decoded_content_for_text_file(self):
+        repo = mock.MagicMock()
+        contents = mock.MagicMock()
+        contents.encoding = None
+        contents.decoded_content = b'hello world'
+        repo.get_contents.return_value = contents
+
+        change = self._make_change('src/main.c', sha='abc123')
+        result = _fetch_file_content(repo, change)
+        self.assertEqual(result, b'hello world')
+        repo.get_contents.assert_called_once_with('src/main.c', ref='abc123')
+
+    def test_returns_base64_decoded_content(self):
+        import base64
+        repo = mock.MagicMock()
+        contents = mock.MagicMock()
+        contents.encoding = 'base64'
+        contents.content = base64.b64encode(b'binary data').decode('ascii')
+        repo.get_contents.return_value = contents
+
+        change = self._make_change('resources/images/icon.png')
+        result = _fetch_file_content(repo, change)
+        self.assertEqual(result, b'binary data')
+
+    def test_returns_none_for_directory(self):
+        repo = mock.MagicMock()
+        repo.get_contents.return_value = [mock.MagicMock(), mock.MagicMock()]
+
+        change = self._make_change('src/')
+        result = _fetch_file_content(repo, change)
+        self.assertIsNone(result)
+
+    def test_returns_none_on_github_exception(self):
+        from github import GithubException
+        repo = mock.MagicMock()
+        repo.get_contents.side_effect = GithubException(404, 'Not Found', {})
+
+        change = self._make_change('src/missing.c', sha='abc')
+        result = _fetch_file_content(repo, change)
+        self.assertIsNone(result)
+
+    def test_uses_sha_ref_when_available(self):
+        repo = mock.MagicMock()
+        contents = mock.MagicMock()
+        contents.encoding = None
+        contents.decoded_content = b'data'
+        repo.get_contents.return_value = contents
+
+        change = self._make_change('src/main.c', sha='deadbeef')
+        _fetch_file_content(repo, change)
+        repo.get_contents.assert_called_once_with('src/main.c', ref='deadbeef')
+
+    def test_uses_no_ref_when_sha_is_none(self):
+        repo = mock.MagicMock()
+        contents = mock.MagicMock()
+        contents.encoding = None
+        contents.decoded_content = b'data'
+        repo.get_contents.return_value = contents
+
+        change = self._make_change('src/main.c', sha=None)
+        _fetch_file_content(repo, change)
+        repo.get_contents.assert_called_once_with('src/main.c', ref=None)
+
+
+class RemoveFileByPathTest(TestCase):
+    def _make_project(self, project_type='native', resources_path='resources'):
+        project = mock.MagicMock()
+        project.project_type = project_type
+        project.resources_path = resources_path
+        return project
+
+    def test_removes_existing_source_file(self):
+        project = self._make_project()
+        source = mock.MagicMock()
+        existing_sources = {'src/main.c': source}
+        existing_resources = {}
+
+        _remove_file_by_path(project, 'src/main.c', existing_sources, existing_resources)
+        source.delete.assert_called_once()
+        self.assertNotIn('src/main.c', existing_sources)
+
+    def test_removes_missing_source_file_from_db(self):
+        project = self._make_project()
+        existing_sources = {}
+        existing_resources = {}
+
+        with mock.patch('ide.tasks.git.SourceFile.get_details_for_path', return_value=('main.c', 'app')):
+            with mock.patch('ide.tasks.git.SourceFile.objects') as mock_objects:
+                mock_filter = mock.MagicMock()
+                mock_objects.filter.return_value = mock_filter
+                _remove_file_by_path(project, 'src/main.c', existing_sources, existing_resources)
+                mock_objects.filter.assert_called_once()
+                mock_filter.delete.assert_called_once()
+
+    def test_removes_resource_variant_and_orphaned_file(self):
+        project = self._make_project()
+        resource_file = mock.MagicMock()
+        resource_file.variants.count.return_value = 0
+        existing_sources = {}
+        existing_resources = {'images/icon.png': resource_file}
+
+        with mock.patch('ide.tasks.git.ResourceVariant.objects') as mock_objects:
+            mock_filter = mock.MagicMock()
+            mock_objects.filter.return_value = mock_filter
+            _remove_file_by_path(project, 'resources/images/icon.png', existing_sources, existing_resources)
+            mock_objects.filter.assert_called_once()
+            mock_filter.delete.assert_called_once()
+            resource_file.delete.assert_called_once()
+            self.assertNotIn('images/icon.png', existing_resources)
+
+    def test_removes_resource_variant_but_keeps_file_with_remaining_variants(self):
+        project = self._make_project()
+        resource_file = mock.MagicMock()
+        resource_file.variants.count.return_value = 1
+        existing_sources = {}
+        existing_resources = {'images/icon.png': resource_file}
+
+        with mock.patch('ide.tasks.git.ResourceVariant.objects') as mock_objects:
+            mock_filter = mock.MagicMock()
+            mock_objects.filter.return_value = mock_filter
+            _remove_file_by_path(project, 'resources/images/icon~color.png', existing_sources, existing_resources)
+            mock_objects.filter.assert_called_once()
+            mock_filter.delete.assert_called_once()
+            resource_file.delete.assert_not_called()
+            self.assertIn('images/icon.png', existing_resources)
+
+    def test_skips_unrecognized_resource_tags(self):
+        project = self._make_project()
+        existing_sources = {}
+        existing_resources = {}
+
+        _remove_file_by_path(project, 'resources/images/icon~unknowntag.png', existing_sources, existing_resources)
+
+    def test_skips_unrecognized_source_paths(self):
+        project = self._make_project()
+        existing_sources = {}
+        existing_resources = {}
+
+        with mock.patch('ide.tasks.git.SourceFile') as MockSourceFile:
+            MockSourceFile.get_details_for_path.side_effect = ValueError('bad path')
+            _remove_file_by_path(project, 'unknown/path.dat', existing_sources, existing_resources)
+            MockSourceFile.objects.filter.assert_not_called()

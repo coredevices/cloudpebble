@@ -357,8 +357,11 @@
     </div>
     <div class="modal-body">
         <div class="dire-warning">
-            {% blocktrans %}<p>Are you sure you want to pull the latest commit? Doing so will <em>overwrite</em> everything currently in your project.</p>
-<p>There will be no further warnings and no opportunity to merge. This cannot be undone.</p>{% endblocktrans %}
+            <p>{% blocktrans %}Are you sure you want to pull the latest commit? Doing so will <em>overwrite</em> everything currently in your project.{% endblocktrans %}</p>
+            <p>{% trans "There will be no further warnings and no opportunity to merge. This cannot be undone." %}</p>
+            <label class="checkbox" style="margin-top: 10px;">
+                <input type="checkbox" id="github-pull-force"> {% trans 'Force full re-import (slower, but ensures consistency)' %}
+            </label>
         </div>
         <div class="running hide">
             <p>{% trans 'Pulling latest commit from GitHub…' %}</p>

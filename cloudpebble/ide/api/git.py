@@ -30,7 +30,8 @@ def github_push(request, project_id):
 @json_view
 def github_pull(request, project_id):
     project = get_object_or_404(Project, pk=project_id, owner=request.user)
-    task = do_github_pull.delay(project.id)
+    force = bool(int(request.POST.get('force', '0')))
+    task = do_github_pull.delay(project.id, force=force)
     return {'task_id': task.task_id}
 
 

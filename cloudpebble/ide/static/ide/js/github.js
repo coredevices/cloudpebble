@@ -198,7 +198,8 @@ CloudPebble.GitHub = (function() {
             var prompt = $('#github-pull-prompt');
             prompt.find(".close, .dire-warning, .modal-footer").addClass("hide");
             prompt.find(".running").removeClass('hide');
-            Ajax.Post('/ide/project/' + PROJECT_ID + '/github/pull').then(function(data) {
+            var forcePull = prompt.find('#github-pull-force').is(':checked') ? '1' : '0';
+            Ajax.Post('/ide/project/' + PROJECT_ID + '/github/pull', {force: forcePull}).then(function(data) {
                 return poll_pull_status(data.task_id);
             }).catch(function(error) {
                 show_alert('error', interpolate(gettext("Pull failed: %s"), [error.message]));
