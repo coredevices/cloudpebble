@@ -721,7 +721,7 @@ CloudPebble.Compile = (function() {
             });
         }).catch(function(error) {
             if (CloudPebble.CompileReboot.shouldShowPrompt(error, SharedPebble.isVirtual())) {
-                CloudPebble.CompileReboot.showRebootPrompt(error.message, kind, installBuild, SharedPebble.reboot, install_on_watch, $('#emulator-reboot-prompt'));
+                CloudPebble.CompileReboot.showRebootPrompt(error.message, kind, installBuild, SharedPebble.reboot.bind(SharedPebble), install_on_watch, $('#emulator-reboot-prompt'));
             } else {
                 throw error;
             }
