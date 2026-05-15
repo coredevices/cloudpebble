@@ -44,6 +44,7 @@ def set_project_repo(request, project_id):
     branch = request.POST['branch']
     auto_pull = bool(int(request.POST['auto_pull']))
     auto_build = bool(int(request.POST['auto_build']))
+    hook_force = bool(int(request.POST.get('hook_force', '0')))
 
     repo = ide.git.url_to_repo(repo)
     if repo is None:
@@ -110,6 +111,7 @@ def set_project_repo(request, project_id):
                 project.github_hook_uuid = None
 
         project.github_hook_build = auto_build
+        project.github_hook_force = hook_force
 
         project.save()
 

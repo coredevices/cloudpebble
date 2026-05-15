@@ -67,6 +67,7 @@ class Project(IdeModel):
     github_last_commit = models.CharField(max_length=40, blank=True, null=True)
     github_hook_uuid = models.CharField(max_length=36, blank=True, null=True)
     github_hook_build = models.BooleanField(default=False)
+    github_hook_force = models.BooleanField(default=False)
 
     project_dependencies = models.ManyToManyField("Project", db_table='cloudpebble_project_dependencies')
 

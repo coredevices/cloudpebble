@@ -25,6 +25,7 @@ from ide.utils.git import git_sha, git_blob
 from ide.utils.project import find_project_root_and_manifest, BaseProjectItem, InvalidProjectArchiveException, MANIFEST_KINDS
 from ide.utils.sdk import generate_manifest_dict, generate_manifest, generate_wscript_file, load_manifest_dict, manifest_name_for_project
 from utils.td_helper import send_td_event
+from utils.events import publish_event
 
 __author__ = 'katharine'
 
@@ -835,11 +836,18 @@ def hooked_commit(project_id, target_commit):
     did_something = False
     logger.debug("Comparing %s versus %s", project.github_last_commit, target_commit)
     if project.github_last_commit != target_commit:
-        github_pull(project.owner, project)
+        publish_event(project_id, 'pull_start')
+        try:
+            github_pull(project.owner, project, force=project.github_hook_force)
+            publish_event(project_id, 'pull_complete', github_last_commit=project.github_last_commit or '')
+        except Exception:
+            publish_event(project_id, 'pull_failed')
+            raise
         did_something = True
 
     if project.github_hook_build:
         build = BuildResult.objects.create(project=project)
+        publish_event(project_id, 'build_start', build_id=build.id)
         run_compile(build.id)
         did_something = True
 

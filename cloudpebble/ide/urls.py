@@ -3,6 +3,7 @@ from django.views.i18n import JavaScriptCatalog
 
 from ide.api import proxy_keen, check_task, get_shortlink, heartbeat
 from ide.api.git import github_push, github_pull, set_project_repo, create_project_repo
+from ide.api.sse import project_events
 from ide.api.phone import ping_phone, check_phone, list_phones, update_phone
 from ide.api.project import (
     project_info,
@@ -242,6 +243,11 @@ urlpatterns = [
         r"^project/(?P<project_id>\d+)/github/push_hook$",
         github_hook,
         name="github_hook",
+    ),
+    re_path(
+        r"^project/(?P<project_id>\d+)/events$",
+        project_events,
+        name="project_events",
     ),
     re_path(
         r"^project/(?P<project_id>\d+)/status\.png$", build_status, name="build_status"

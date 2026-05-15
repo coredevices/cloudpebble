@@ -93,6 +93,7 @@ CloudPebble.Init = function() {
             CloudPebble.Publish.Init();
         }
         CloudPebble.FuzzyPrompt.Init();
+        CloudPebble.Events.Init();
         CloudPebble.ProgressBar.Hide();
 
         // Add source files.

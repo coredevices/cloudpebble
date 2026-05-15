@@ -23,7 +23,18 @@
                         <option value="0">{% trans 'Manually' %}</option>
                         <option value="1">{% trans 'Automatically' %}</option>
                     </select>
-                    <span class="help-block">{% trans "If you select 'Automatically', the contents of this project <em>will be overwritten</em> every time you push to your repo from elsewhere, <em>without prompting you</em>." %}</span>
+                </div>
+            </div>
+            <div class="control-group" style="margin-bottom:0;">
+                <label class="control-label" style="padding-top:4px;">{% trans 'Wipe on auto-pull' %}</label>
+                <div class="controls">
+                    <input type="checkbox" id="github-repo-hook-force" disabled style="margin-top:0;">
+                </div>
+            </div>
+            <div class="control-group" style="margin-bottom:0;">
+                <label class="control-label">&nbsp;</label>
+                <div class="controls">
+                    <span class="help-block" id="github-repo-hook-help" style="margin-bottom:0;margin-top:0;"></span>
                 </div>
             </div>
             <div class="control-group">
