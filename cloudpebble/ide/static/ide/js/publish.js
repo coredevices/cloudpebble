@@ -433,12 +433,27 @@ CloudPebble.Publish = (function() {
                     });
                 });
             }).then(function() {
-                // Set time to random HH:MM:58 so GIF captures a minute rollover
-                var randomHour = Math.floor(Math.random() * 12) + 1;
-                var randomMinute = Math.floor(Math.random() * 60);
-                var gifTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), randomHour, randomMinute, 58, 0).getTime();
-                statusEl.text('Setting time for GIF on ' + platform + '...');
-                return setEmulatorTime(pebble, gifTime);
+                // QEMU 10 / pebble-emery (and other recent boards) silently
+                // ignore SetUTC, so we can no longer force the watch to a
+                // specific HH:MM:58 to capture a rollover. Instead, wait until
+                // a real wall-clock minute boundary will fall inside the
+                // recording window. With a 5 s clip and ~2 s of pre-rollover
+                // padding, the minute change lands roughly 2 s in.
+                //
+                // First, re-align the watch clock to wall time. On boards that
+                // ignore SetUTC this is a harmless no-op; on boards that honor
+                // it, this undoes the 10:10:00 drift from the static
+                // screenshot so the host minute boundary actually corresponds
+                // to a watch minute boundary.
+                statusEl.text('Re-aligning clock on ' + platform + '...');
+                return setEmulatorTime(pebble, Date.now()).then(function() {
+                    var preRolloverMs = 2000;
+                    var nowMs = Date.now();
+                    var waitMs = (60000 - (nowMs % 60000)) - preRolloverMs;
+                    if (waitMs < 0) waitMs += 60000;
+                    statusEl.text('Waiting ' + Math.round(waitMs / 1000) + 's for minute rollover on ' + platform + '...');
+                    return Promise.delay(waitMs);
+                });
             }).then(function() {
                 // Record GIF from VNC canvas
                 var canvas = $('#emulator-container canvas')[0];
