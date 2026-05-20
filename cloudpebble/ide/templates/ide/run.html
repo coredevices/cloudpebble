@@ -483,7 +483,7 @@ _.each(SUPPORTED_PLATFORMS, function(p) {
 
 var mCurrentPlatform = null;
 var mAutoShutdownTimer = null;
-var RUN_TIMEOUT_MS = 60000; // 1 minute
+var RUN_TIMEOUT_MS = 300000; // 5 minutes
 
 function setStatus(text) {
     document.getElementById('run-status').textContent = text;
