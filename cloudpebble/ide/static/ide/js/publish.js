@@ -397,9 +397,13 @@ CloudPebble.Publish = (function() {
                 clearInterval(backlightInterval);
             }
 
-            // Set time to 10:10 for the static screenshot
+            // Pick a random "X:10" hour, reused for both the PNG and the GIF
+            // so the captured static frame and the captured rollover show a
+            // matching clock. Hour 1-12 (12-hour-style); date is today so the
+            // date complication still renders.
+            var randomHour = Math.floor(Math.random() * 12) + 1;
             var now = new Date();
-            var screenshotTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10, 10, 0, 0).getTime();
+            var screenshotTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), randomHour, 10, 0, 0).getTime();
             statusEl.text('Setting time on ' + platform + '...');
             return setEmulatorTime(pebble, screenshotTime).then(function() {
 
@@ -433,27 +437,20 @@ CloudPebble.Publish = (function() {
                     });
                 });
             }).then(function() {
-                // QEMU 10 / pebble-emery (and other recent boards) silently
-                // ignore SetUTC, so we can no longer force the watch to a
-                // specific HH:MM:58 to capture a rollover. Instead, wait until
-                // a real wall-clock minute boundary will fall inside the
-                // recording window. With a 5 s clip and ~2 s of pre-rollover
-                // padding, the minute change lands roughly 2 s in.
+                // Set the watch to HH:09:55 so the 5 s GIF recording captures
+                // the :09 → :10 minute rollover. Hour matches the PNG so the
+                // two captures look like they came from the same moment.
                 //
-                // First, re-align the watch clock to wall time. On boards that
-                // ignore SetUTC this is a harmless no-op; on boards that honor
-                // it, this undoes the 10:10:00 drift from the static
-                // screenshot so the host minute boundary actually corresponds
-                // to a watch minute boundary.
-                statusEl.text('Re-aligning clock on ' + platform + '...');
-                return setEmulatorTime(pebble, Date.now()).then(function() {
-                    var preRolloverMs = 2000;
-                    var nowMs = Date.now();
-                    var waitMs = (60000 - (nowMs % 60000)) - preRolloverMs;
-                    if (waitMs < 0) waitMs += 60000;
-                    statusEl.text('Waiting ' + Math.round(waitMs / 1000) + 's for minute rollover on ' + platform + '...');
-                    return Promise.delay(waitMs);
-                });
+                // Note: QEMU 10's pebble-emery board silently drops SetUTC
+                // packets, so on that combination the watch ignores this and
+                // keeps showing wall-clock time. The PNG above will reveal
+                // when that happens (it will show wall-clock time, not
+                // HH:10), and the GIF will likely not contain a rollover.
+                // Every other emulator backend honors SetUTC and gets the
+                // intended :09 → :10 capture.
+                var gifTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), randomHour, 9, 55, 0).getTime();
+                statusEl.text('Setting time for GIF rollover on ' + platform + '...');
+                return setEmulatorTime(pebble, gifTime);
             }).then(function() {
                 // Record GIF from VNC canvas
                 var canvas = $('#emulator-container canvas')[0];
