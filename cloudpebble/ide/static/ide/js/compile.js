@@ -598,6 +598,8 @@ CloudPebble.Compile = (function() {
         }
     }
 
+
+
     var install_on_watch = function(kind, build) {
         var installBuild = build || mLastBuild;
         if(!installBuild || !installBuild.download || !installBuild.sizes) {
@@ -717,10 +719,16 @@ CloudPebble.Compile = (function() {
                 modal.find('.progress').addClass('progress-danger').removeClass('progress-striped');
                 throw error;
             });
+        }).catch(function(error) {
+            if (CloudPebble.CompileReboot.shouldShowPrompt(error, SharedPebble.isVirtual())) {
+                CloudPebble.CompileReboot.showRebootPrompt(error.message, kind, installBuild, SharedPebble.reboot.bind(SharedPebble), install_on_watch, $('#emulator-reboot-prompt'));
+            } else {
+                throw error;
+            }
         });
     };
 
-    var show_clear_logs_prompt = function() {
+var show_clear_logs_prompt = function() {
         CloudPebble.Prompts.Confirm(gettext("Clear all app logs?"), gettext("This cannot be undone."), function() {
             ga('send', 'event', 'logs', 'delete');
             //CloudPebble.Analytics.addEvent('app_log_clear', {log_length: mPreviousDisplayLogs.length, virtual: SharedPebble.isVirtual()});

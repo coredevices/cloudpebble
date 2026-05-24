@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   build-essential ninja-build pkg-config python3-venv \
   libsdl2-dev libpixman-1-dev libglib2.0-dev \
   libpcre2-dev libffi-dev zlib1g-dev \
-  nettle-dev \
+  libpng-dev nettle-dev \
   git ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
