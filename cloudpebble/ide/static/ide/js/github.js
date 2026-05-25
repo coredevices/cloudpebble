@@ -39,10 +39,8 @@ CloudPebble.GitHub = (function() {
         var update_pull_mode_ui = function() {
             var auto_pull = pane.find('#github-repo-hook').val() == '1';
             var force_checkbox = pane.find('#github-repo-hook-force');
-            var force_wrapper = pane.find('#github-repo-hook-force-wrapper');
             var help_text = pane.find('#github-repo-hook-help');
             if (auto_pull) {
-                force_wrapper.removeClass('disabled');
                 force_checkbox.removeAttr('disabled');
                 if (force_checkbox.is(':checked')) {
                     help_text.html(gettext("Auto-pull will <em>wipe and re-import</em> all files from GitHub every time you push. This is slower but more thorough than the default delta sync."));
@@ -50,7 +48,6 @@ CloudPebble.GitHub = (function() {
                     help_text.html(gettext("Auto-pull will sync only the <em>changed files</em> from GitHub every time you push. This is fast but check the box above for a full re-import if you encounter issues."));
                 }
             } else {
-                force_wrapper.addClass('disabled');
                 force_checkbox.attr('disabled', 'disabled');
                 help_text.html(gettext("You will need to pull from GitHub manually using the button below. Auto-pull is disabled."));
             }
