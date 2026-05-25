@@ -1,11 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
-import {
-    handlePullStart,
-    handlePullComplete,
-    handlePullFailed,
-    handleBuildStart,
-    handleBuildComplete
-} from '../sse-events.js';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 
 function makeCloudPebble() {
     return {
@@ -25,71 +20,91 @@ function makeCloudPebble() {
     };
 }
 
-describe('handlePullStart', () => {
-    it('sets github sidebar icon to refresh and calls OnPullStart', () => {
-        const CloudPebble = makeCloudPebble();
-        handlePullStart(CloudPebble);
-        expect(CloudPebble.Sidebar.SetIcon).toHaveBeenCalledWith('github', 'refresh');
-        expect(CloudPebble.GitHub.OnPullStart).toHaveBeenCalled();
-    });
-});
+function loadSseModule(CloudPebble) {
+    global.PROJECT_ID = 1;
+    global.CloudPebble = CloudPebble;
+    global.EventSource = vi.fn().mockImplementation(() => ({
+        addEventListener: vi.fn(),
+        close: vi.fn(),
+        readyState: 0
+    }));
 
-describe('handlePullComplete', () => {
-    it('clears github icon and calls OnPullComplete with parsed data', () => {
-        const CloudPebble = makeCloudPebble();
-        const event = { data: JSON.stringify({ github_last_commit: 'abc123' }) };
-        handlePullComplete(event, CloudPebble);
-        expect(CloudPebble.Sidebar.ClearIcon).toHaveBeenCalledWith('github');
-        expect(CloudPebble.GitHub.OnPullComplete).toHaveBeenCalledWith({ github_last_commit: 'abc123' });
-    });
+    const ssePath = resolve(__dirname, '..', 'sse.js');
+    const code = readFileSync(ssePath, 'utf8');
+    const fn = new Function(code);
+    fn();
 
-    it('handles pull_complete with empty data', () => {
-        const CloudPebble = makeCloudPebble();
-        const event = { data: JSON.stringify({}) };
-        handlePullComplete(event, CloudPebble);
-        expect(CloudPebble.GitHub.OnPullComplete).toHaveBeenCalledWith({});
-    });
-});
+    return CloudPebble.Events;
+}
 
-describe('handlePullFailed', () => {
-    it('clears github icon and calls OnPullFailed', () => {
-        const CloudPebble = makeCloudPebble();
-        handlePullFailed(CloudPebble);
-        expect(CloudPebble.Sidebar.ClearIcon).toHaveBeenCalledWith('github');
-        expect(CloudPebble.GitHub.OnPullFailed).toHaveBeenCalled();
-    });
-});
+describe('sse event handlers', () => {
+    let CloudPebble;
+    let events;
 
-describe('handleBuildStart', () => {
-    it('sets compile sidebar icon to refresh and calls OnBuildStart with build_id', () => {
-        const CloudPebble = makeCloudPebble();
-        const event = { data: JSON.stringify({ build_id: 42 }) };
-        handleBuildStart(event, CloudPebble);
-        expect(CloudPebble.Sidebar.SetIcon).toHaveBeenCalledWith('compile', 'refresh');
-        expect(CloudPebble.Compile.OnBuildStart).toHaveBeenCalledWith(42);
+    beforeEach(() => {
+        CloudPebble = makeCloudPebble();
+        events = loadSseModule(CloudPebble);
+        vi.clearAllMocks();
     });
 
-    it('parses build_id as integer from JSON data', () => {
-        const CloudPebble = makeCloudPebble();
-        const event = { data: JSON.stringify({ build_id: 99 }) };
-        handleBuildStart(event, CloudPebble);
-        expect(CloudPebble.Compile.OnBuildStart).toHaveBeenCalledWith(99);
-    });
-});
-
-describe('handleBuildComplete', () => {
-    it('clears compile icon and calls OnBuildComplete with build_id and state', () => {
-        const CloudPebble = makeCloudPebble();
-        const event = { data: JSON.stringify({ build_id: 42, state: 'succeeded' }) };
-        handleBuildComplete(event, CloudPebble);
-        expect(CloudPebble.Sidebar.ClearIcon).toHaveBeenCalledWith('compile');
-        expect(CloudPebble.Compile.OnBuildComplete).toHaveBeenCalledWith(42, 'succeeded');
+    describe('handlePullStart', () => {
+        it('sets github sidebar icon to refresh and calls OnPullStart', () => {
+            events.handlePullStart();
+            expect(CloudPebble.Sidebar.SetIcon).toHaveBeenCalledWith('github', 'refresh');
+            expect(CloudPebble.GitHub.OnPullStart).toHaveBeenCalled();
+        });
     });
 
-    it('passes failed state correctly', () => {
-        const CloudPebble = makeCloudPebble();
-        const event = { data: JSON.stringify({ build_id: 7, state: 'failed' }) };
-        handleBuildComplete(event, CloudPebble);
-        expect(CloudPebble.Compile.OnBuildComplete).toHaveBeenCalledWith(7, 'failed');
+    describe('handlePullComplete', () => {
+        it('clears github icon and calls OnPullComplete with parsed data', () => {
+            const event = { data: JSON.stringify({ github_last_commit: 'abc123' }) };
+            events.handlePullComplete(event);
+            expect(CloudPebble.Sidebar.ClearIcon).toHaveBeenCalledWith('github');
+            expect(CloudPebble.GitHub.OnPullComplete).toHaveBeenCalledWith({ github_last_commit: 'abc123' });
+        });
+
+        it('handles pull_complete with empty data', () => {
+            const event = { data: JSON.stringify({}) };
+            events.handlePullComplete(event);
+            expect(CloudPebble.GitHub.OnPullComplete).toHaveBeenCalledWith({});
+        });
+    });
+
+    describe('handlePullFailed', () => {
+        it('clears github icon and calls OnPullFailed', () => {
+            events.handlePullFailed();
+            expect(CloudPebble.Sidebar.ClearIcon).toHaveBeenCalledWith('github');
+            expect(CloudPebble.GitHub.OnPullFailed).toHaveBeenCalled();
+        });
+    });
+
+    describe('handleBuildStart', () => {
+        it('sets compile sidebar icon to refresh and calls OnBuildStart with build_id', () => {
+            const event = { data: JSON.stringify({ build_id: 42 }) };
+            events.handleBuildStart(event);
+            expect(CloudPebble.Sidebar.SetIcon).toHaveBeenCalledWith('compile', 'refresh');
+            expect(CloudPebble.Compile.OnBuildStart).toHaveBeenCalledWith(42);
+        });
+
+        it('parses build_id as integer from JSON data', () => {
+            const event = { data: JSON.stringify({ build_id: 99 }) };
+            events.handleBuildStart(event);
+            expect(CloudPebble.Compile.OnBuildStart).toHaveBeenCalledWith(99);
+        });
+    });
+
+    describe('handleBuildComplete', () => {
+        it('clears compile icon and calls OnBuildComplete with build_id and state', () => {
+            const event = { data: JSON.stringify({ build_id: 42, state: 'succeeded' }) };
+            events.handleBuildComplete(event);
+            expect(CloudPebble.Sidebar.ClearIcon).toHaveBeenCalledWith('compile');
+            expect(CloudPebble.Compile.OnBuildComplete).toHaveBeenCalledWith(42, 'succeeded');
+        });
+
+        it('passes failed state correctly', () => {
+            const event = { data: JSON.stringify({ build_id: 7, state: 'failed' }) };
+            events.handleBuildComplete(event);
+            expect(CloudPebble.Compile.OnBuildComplete).toHaveBeenCalledWith(7, 'failed');
+        });
     });
 });
