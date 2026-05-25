@@ -244,6 +244,9 @@ CloudPebble.Sidebar = (function() {
             a.find('i').removeClass().addClass('icon-' + icon);
         },
         ShowPending: function(pane_id, text) {
+            if (this._pendingTimers && this._pendingTimers[pane_id]) {
+                clearInterval(this._pendingTimers[pane_id]);
+            }
             this.ClearIcon(pane_id);
             var a = $('#sidebar-pane-' + pane_id).find('a');
             var span = $('<span class="sidebar-pending">').text(text);
