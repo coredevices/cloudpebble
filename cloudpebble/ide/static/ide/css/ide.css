@@ -1617,3 +1617,12 @@ label .text-icon {
 .spinner-light {
     background-image: url("/static/ide/img/spinner.gif");
 }
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.icon-refresh {
+    animation: spin 1s linear infinite;
+}
