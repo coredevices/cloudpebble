@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 
 from utils.events import publish_event
 from ide.api.sse import SSEEventStream, project_events
-from ide.tasks.git import hooked_commit
+from ide.tasks.git import hooked_commit, do_github_pull
 from ide.tasks.build import run_compile
 
 
@@ -76,8 +76,8 @@ class TestSSEEventStream(TestCase):
         for item in stream:
             results.append(item)
         self.assertEqual(len(results), 2)
-        self.assertEqual(results[0], 'data: {"type":"pull_start"}\n\n')
-        self.assertEqual(results[1], 'data: {"type":"pull_complete","github_last_commit":"abc123"}\n\n')
+        self.assertEqual(results[0], 'event: pull_start\ndata: {}\n\n')
+        self.assertEqual(results[1], 'event: pull_complete\ndata: {"github_last_commit": "abc123"}\n\n')
 
     def test_stream_skips_non_message_types(self):
         stream = SSEEventStream.__new__(SSEEventStream)
@@ -91,6 +91,7 @@ class TestSSEEventStream(TestCase):
         for item in stream:
             results.append(item)
         self.assertEqual(len(results), 1)
+        self.assertIn('event:', results[0])
         self.assertIn('build_start', results[0])
 
     def test_stream_decodes_bytes_data(self):
@@ -101,7 +102,7 @@ class TestSSEEventStream(TestCase):
             {'type': 'message', 'data': b'{"type":"pull_start"}'},
         ]
         results = list(stream)
-        self.assertEqual(results[0], 'data: {"type":"pull_start"}\n\n')
+        self.assertEqual(results[0], 'event: pull_start\ndata: {}\n\n')
 
     def test_stream_handles_string_data(self):
         stream = SSEEventStream.__new__(SSEEventStream)
@@ -111,7 +112,7 @@ class TestSSEEventStream(TestCase):
             {'type': 'message', 'data': '{"type":"pull_start"}'},
         ]
         results = list(stream)
-        self.assertEqual(results[0], 'data: {"type":"pull_start"}\n\n')
+        self.assertEqual(results[0], 'event: pull_start\ndata: {}\n\n')
 
     def test_stream_cleans_up_on_generator_exit(self):
         stream = SSEEventStream.__new__(SSEEventStream)
@@ -249,6 +250,75 @@ class TestHookedCommitEvents(TestCase):
         types = [call[0][1] for call in mock_publish.call_args_list]
         self.assertNotIn('build_start', types)
         mock_compile.assert_not_called()
+
+
+class TestDoGithubPullEvents(TestCase):
+    @mock.patch('ide.tasks.git.publish_event')
+    @mock.patch('ide.tasks.git.run_compile')
+    @mock.patch('ide.tasks.git.github_pull')
+    def test_publishes_pull_events(self, mock_pull, mock_compile, mock_publish):
+        from ide.models.project import Project
+        user = User.objects.create_user('pulltest1', 'pull1@test.test', 'testpass')
+        project = Project.objects.create(
+            owner=user, name='pullproj1',
+            github_repo='owner/repo', github_branch='main',
+            github_last_commit='oldsha', github_hook_build=False,
+        )
+        mock_pull.return_value = True
+        do_github_pull(project.id)
+        types = [call[0][1] for call in mock_publish.call_args_list]
+        self.assertEqual(types[0], 'pull_start')
+        self.assertEqual(types[1], 'pull_complete')
+
+    @mock.patch('ide.tasks.git.publish_event')
+    @mock.patch('ide.tasks.git.run_compile')
+    @mock.patch('ide.tasks.git.github_pull')
+    def test_auto_builds_when_hook_build_enabled(self, mock_pull, mock_compile, mock_publish):
+        from ide.models.project import Project
+        user = User.objects.create_user('pulltest2', 'pull2@test.test', 'testpass')
+        project = Project.objects.create(
+            owner=user, name='pullproj2',
+            github_repo='owner/repo', github_branch='main',
+            github_last_commit='oldsha', github_hook_build=True,
+        )
+        mock_pull.return_value = True
+        do_github_pull(project.id)
+        types = [call[0][1] for call in mock_publish.call_args_list]
+        self.assertIn('build_start', types)
+        mock_compile.assert_called_once()
+
+    @mock.patch('ide.tasks.git.publish_event')
+    @mock.patch('ide.tasks.git.run_compile')
+    @mock.patch('ide.tasks.git.github_pull')
+    def test_no_auto_build_when_hook_build_disabled(self, mock_pull, mock_compile, mock_publish):
+        from ide.models.project import Project
+        user = User.objects.create_user('pulltest3', 'pull3@test.test', 'testpass')
+        project = Project.objects.create(
+            owner=user, name='pullproj3',
+            github_repo='owner/repo', github_branch='main',
+            github_last_commit='oldsha', github_hook_build=False,
+        )
+        mock_pull.return_value = True
+        do_github_pull(project.id)
+        types = [call[0][1] for call in mock_publish.call_args_list]
+        self.assertNotIn('build_start', types)
+        mock_compile.assert_not_called()
+
+    @mock.patch('ide.tasks.git.publish_event')
+    @mock.patch('ide.tasks.git.github_pull')
+    def test_publishes_pull_failed_on_exception(self, mock_pull, mock_publish):
+        from ide.models.project import Project
+        user = User.objects.create_user('pulltest4', 'pull4@test.test', 'testpass')
+        project = Project.objects.create(
+            owner=user, name='pullproj4',
+            github_repo='owner/repo', github_branch='main',
+            github_last_commit='oldsha', github_hook_build=False,
+        )
+        mock_pull.side_effect = Exception('pull failed')
+        with self.assertRaises(Exception):
+            do_github_pull(project.id)
+        types = [call[0][1] for call in mock_publish.call_args_list]
+        self.assertEqual(types, ['pull_start', 'pull_failed'])
 
 
 class TestRunCompileEvents(TestCase):

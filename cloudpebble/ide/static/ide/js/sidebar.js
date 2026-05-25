@@ -243,8 +243,27 @@ CloudPebble.Sidebar = (function() {
 
             a.find('i').removeClass().addClass('icon-' + icon);
         },
+        ShowPending: function(pane_id, text) {
+            this.ClearIcon(pane_id);
+            var a = $('#sidebar-pane-' + pane_id).find('a');
+            var span = $('<span class="sidebar-pending">').text(text);
+            a.append(span);
+            var dots = 1;
+            this._pendingTimers = this._pendingTimers || {};
+            this._pendingTimers[pane_id] = setInterval(function() {
+                span.text(text + '.'.repeat(dots));
+                dots = (dots % 3) + 1;
+            }, 1000);
+        },
+        HidePending: function(pane_id) {
+            if (this._pendingTimers && this._pendingTimers[pane_id]) {
+                clearInterval(this._pendingTimers[pane_id]);
+                delete this._pendingTimers[pane_id];
+            }
+            this.ClearIcon(pane_id);
+        },
         ClearIcon: function(pane_id) {
-            $('#sidebar-pane-' + pane_id).find('a > i').remove();
+            $('#sidebar-pane-' + pane_id).find('a > i, a > .sidebar-pending').remove();
         },
         Init: function() {
             $('#sidebar-pane-new-resource').click(CloudPebble.Resources.Create);

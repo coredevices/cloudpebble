@@ -560,7 +560,7 @@ def _github_pull_delta(user, project, repo, new_commit_sha):
     commit = repo.get_git_commit(new_commit_sha)
     tree = repo.get_git_tree(commit.tree.sha, recursive=True)
 
-    paths_notags = {get_root_path(x) for x in tree.tree}
+    paths_notags = {get_root_path(x.path) for x in tree.tree}
 
     try:
         root, manifest = parse_manifest_from_tree(
@@ -827,7 +827,18 @@ def do_github_push(project_id, commit_message):
 @shared_task
 def do_github_pull(project_id, force=False):
     project = Project.objects.select_related('owner__github').get(pk=project_id)
-    return github_pull(project.owner, project, force=force)
+    publish_event(project_id, 'pull_start')
+    try:
+        github_pull(project.owner, project, force=force)
+        publish_event(project_id, 'pull_complete', github_last_commit=project.github_last_commit or '')
+    except Exception:
+        publish_event(project_id, 'pull_failed')
+        raise
+
+    if project.github_hook_build:
+        build = BuildResult.objects.create(project=project)
+        publish_event(project_id, 'build_start', build_id=build.id)
+        run_compile(build.id)
 
 
 @shared_task

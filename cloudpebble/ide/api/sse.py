@@ -23,7 +23,9 @@ class SSEEventStream:
                     data = message['data']
                     if isinstance(data, bytes):
                         data = data.decode('utf-8')
-                    yield 'data: {}\n\n'.format(data)
+                    parsed = json.loads(data)
+                    event_type = parsed.pop('type', 'message')
+                    yield 'event: {}\ndata: {}\n\n'.format(event_type, json.dumps(parsed))
         except GeneratorExit:
             pass
         finally:

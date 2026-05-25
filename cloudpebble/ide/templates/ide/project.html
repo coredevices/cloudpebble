@@ -357,17 +357,14 @@
     </div>
     <div class="modal-body">
         <div class="dire-warning">
-            <p>{% blocktrans %}Are you sure you want to pull the latest commit? Doing so will <em>overwrite</em> everything currently in your project.{% endblocktrans %}</p>
-            <p>{% trans "There will be no further warnings and no opportunity to merge. This cannot be undone." %}</p>
-            <label class="checkbox" style="margin-top: 10px;">
-                <input type="checkbox" id="github-pull-force"> {% trans 'Force full re-import (slower, but ensures consistency)' %}
+            <p>{% trans "This will pull the latest changes from GitHub and apply only the files that have changed since your last pull." %}</p>
+            <label style="display: flex; align-items: center; gap: 6px; margin-top: 10px;">
+                <input type="checkbox" id="github-pull-force"> <span>{% trans 'Force full re-import (slower, but ensures consistency)' %}</span>
             </label>
         </div>
-        <div class="running hide">
-            <p>{% trans 'Pulling latest commit from GitHub…' %}</p>
-            <div class="progress progress-striped active">
-                <div class="bar" style="width: 100%;"></div>
-            </div>
+        <div id="github-pull-force-warning" class="hide" style="margin-top: 8px; color: #a94442; text-align: center;">
+            <p>{% blocktrans %}<strong>Warning:</strong> A full re-import will <em>overwrite</em> everything currently in your project.{% endblocktrans %}</p>
+            <p>{% trans "There will be no further warnings and no opportunity to merge. This cannot be undone." %}</p>
         </div>
     </div>
     <div class="modal-footer">

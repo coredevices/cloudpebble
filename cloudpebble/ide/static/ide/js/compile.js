@@ -954,7 +954,6 @@ var show_clear_logs_prompt = function() {
                 var tempBuild = {started: (new Date()).toISOString(), finished: null, state: 1, uuid: null, id: buildId, size: {total: null, binary: null, resources: null}};
                 update_last_build(pane, tempBuild);
                 pane.find('#run-build-table').prepend(build_history_row(tempBuild));
-                show_compile_pane();
             }
         },
         OnBuildComplete: function(buildId, state) {

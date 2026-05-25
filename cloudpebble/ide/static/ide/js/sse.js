@@ -5,25 +5,25 @@ CloudPebble.Events = (function() {
 
     var handlers = {
         handlePullStart: function() {
-            CloudPebble.Sidebar.SetIcon('github', 'refresh');
+            CloudPebble.Sidebar.ShowPending('github', 'Pulling');
             CloudPebble.GitHub.OnPullStart();
         },
         handlePullComplete: function(e) {
-            CloudPebble.Sidebar.ClearIcon('github');
+            CloudPebble.Sidebar.HidePending('github');
             CloudPebble.GitHub.OnPullComplete(JSON.parse(e.data));
         },
         handlePullFailed: function() {
-            CloudPebble.Sidebar.ClearIcon('github');
+            CloudPebble.Sidebar.HidePending('github');
             CloudPebble.GitHub.OnPullFailed();
         },
         handleBuildStart: function(e) {
             var data = JSON.parse(e.data);
-            CloudPebble.Sidebar.SetIcon('compile', 'refresh');
+            CloudPebble.Sidebar.ShowPending('compile', 'Building');
             CloudPebble.Compile.OnBuildStart(data.build_id);
         },
         handleBuildComplete: function(e) {
             var data = JSON.parse(e.data);
-            CloudPebble.Sidebar.ClearIcon('compile');
+            CloudPebble.Sidebar.HidePending('compile');
             CloudPebble.Compile.OnBuildComplete(data.build_id, data.state);
         }
     };

@@ -167,6 +167,12 @@ CloudPebble.GitHub = (function() {
             var prompt = $('#github-pull-prompt').modal();
             prompt.find(".running").addClass('hide');
             prompt.find(".close, .dire-warning, .modal-footer").removeClass("hide");
+            prompt.find('#github-pull-force').prop('checked', false);
+            prompt.find('#github-pull-force-warning').addClass('hide');
+        });
+
+        $(document).on('change', '#github-pull-force', function() {
+            $('#github-pull-force-warning').toggleClass('hide', !$(this).is(':checked'));
         });
 
         var poll_commit_status = function(task_id) {
@@ -186,11 +192,6 @@ CloudPebble.GitHub = (function() {
             return Ajax.PollTask(task_id).then(function(result) {
                 if(result) {
                     show_alert('success', gettext("Pulled successfully."));
-                    alert(gettext("Pull completed successfully."));
-                    // *NASTY HACK: Make sure it doesn't think we have unsaved files, thereby
-                    // preventing page reload.
-                    CloudPebble.Editor.GetUnsavedFiles = function() { return 0; };
-                    window.location.reload(true);
                 } else {
                     var lastSync = CloudPebble.ProjectInfo.github.last_sync;
                     if(lastSync) {
@@ -231,8 +232,7 @@ CloudPebble.GitHub = (function() {
         $('#github-pull-prompt-confirm').click(function() {
             disable_all();
             var prompt = $('#github-pull-prompt');
-            prompt.find(".close, .dire-warning, .modal-footer").addClass("hide");
-            prompt.find(".running").removeClass('hide');
+            prompt.modal('hide');
             var forcePull = prompt.find('#github-pull-force').is(':checked') ? '1' : '0';
             Ajax.Post('/ide/project/' + PROJECT_ID + '/github/pull', {force: forcePull}).then(function(data) {
                 return poll_pull_status(data.task_id);
@@ -240,7 +240,6 @@ CloudPebble.GitHub = (function() {
                 show_alert('error', interpolate(gettext("Pull failed: %s"), [error.message]));
             }).finally(function() {
                 enable_all();
-                prompt.modal('hide');
             });
             ga('send', 'event', 'github', 'pull');
         });

@@ -417,7 +417,8 @@ GITHUB_DEV_CLIENT_SECRET = _environ.get('GITHUB_DEV_CLIENT_SECRET', _environ.get
 GITHUB_SYNC_CLIENT_ID = _environ.get('GITHUB_SYNC_CLIENT_ID', '')
 GITHUB_SYNC_CLIENT_SECRET = _environ.get('GITHUB_SYNC_CLIENT_SECRET', '')
 
-GITHUB_HOOK_TEMPLATE = _environ.get('GITHUB_HOOK', PUBLIC_URL.rstrip('/') + '/ide/project/%(project)d/github/push_hook?key=%(key)s')
+GITHUB_HOOK_BASE_URL = _environ.get('GITHUB_HOOK_URL', '')
+GITHUB_HOOK_TEMPLATE = (GITHUB_HOOK_BASE_URL.rstrip('/') if GITHUB_HOOK_BASE_URL else PUBLIC_URL.rstrip('/')) + '/ide/project/%(project)d/github/push_hook?key=%(key)s'
 
 SDK2_PEBBLE_WAF = _environ.get('SDK2_PEBBLE_WAF', '/sdk2/pebble/waf')
 SDK3_PEBBLE_WAF = _environ.get('SDK3_PEBBLE_WAF', '/sdk3/pebble/waf')

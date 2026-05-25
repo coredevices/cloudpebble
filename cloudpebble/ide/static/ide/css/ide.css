@@ -1618,11 +1618,12 @@ label .text-icon {
     background-image: url("/static/ide/img/spinner.gif");
 }
 
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
-.icon-refresh {
-    animation: spin 1s linear infinite;
+.sidebar-pending {
+    display: inline-block;
+    font-size: 11px;
+    color: #ff4700;
+    margin-left: 6px;
+    font-family: sans-serif;
+    font-weight: bold;
+    vertical-align: middle;
 }

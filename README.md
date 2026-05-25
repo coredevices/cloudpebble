@@ -24,6 +24,7 @@ All runtime configuration lives in `.env`. Edit it before building:
 | `NODE_VERSION_YCMD` | `16.20.2` | Node.js version in ycmd image |
 | `NGINX_PORT` | `8080` | Host port nginx binds to |
 | `PUBLIC_URL` | `http://localhost:8080` | Public-facing URL (see note below) |
+| `GITHUB_HOOK_URL` | *(uses PUBLIC_URL)* | Base URL for GitHub webhook callbacks (see ngrok note below) |
 | `EXPECT_SSL` | `no` | Set to `yes` for HTTPS deployments |
 | `EMULATOR_FIXED_LIMIT` | `90` | Max concurrent emulators |
 | `LIBPEBBLE_PROXY` | `wss://cloudpebble-proxy.repebble.com/tool` | libpebble proxy WebSocket URL |
@@ -36,6 +37,29 @@ All runtime configuration lives in `.env`. Edit it before building:
 | `POSTGRES_IMAGE` | `postgres:16` | PostgreSQL container image |
 
 > **Note:** `PUBLIC_URL` tells Django how the outside world reaches the site (used for generating callback URLs, media paths, etc.). `NGINX_PORT` controls which host port nginx binds to. In dev, they typically match; in production behind a reverse proxy, `PUBLIC_URL` is the external URL and `NGINX_PORT` may differ.
+
+### Using ngrok for GitHub webhooks in local development
+
+GitHub requires webhook callback URLs to be publicly reachable — it rejects `localhost` URLs. During local development, use [ngrok](https://ngrok.com) to expose your instance:
+
+```bash
+ngrok http 8080
+```
+
+Copy the HTTPS URL ngrok gives you (e.g. `https://abc123.ngrok-free.dev`). **Do not** set `PUBLIC_URL` to the ngrok URL — Firebase Auth requires `localhost` for sign-in. Instead, set `GITHUB_HOOK_URL` to the ngrok base URL so only webhook callbacks use it:
+
+```bash
+# In .env.local (or .env):
+GITHUB_HOOK_URL=https://abc123.ngrok-free.dev
+```
+
+Then rebuild and restart:
+
+```bash
+docker compose build && docker compose up -d
+```
+
+Now you can browse CloudPebble at `http://localhost:8080` (Firebase login works) while GitHub can POST webhook callbacks to the ngrok URL.<tool_call>
 
 ### Test GitHub Repo Sync locally
 
