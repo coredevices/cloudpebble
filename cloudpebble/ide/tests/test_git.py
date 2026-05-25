@@ -16,6 +16,12 @@ from ide.tasks.git import (
     _strip_resource_dir_prefix,
     _fetch_file_content,
     _remove_file_by_path,
+    github_pull,
+    _github_pull_delta,
+    _apply_delta_changes,
+    _upsert_source_file,
+    _upsert_resource_variant,
+    _sync_resource_files_from_manifest,
 )
 from ide.utils.project import BaseProjectItem
 
@@ -476,3 +482,434 @@ class RemoveFileByPathTest(TestCase):
             MockSourceFile.get_details_for_path.side_effect = ValueError('bad path')
             _remove_file_by_path(project, 'unknown/path.dat', existing_sources, existing_resources)
             MockSourceFile.objects.filter.assert_not_called()
+
+
+def _mock_github():
+    mock_repo = mock.MagicMock()
+    mock_repo.default_branch = 'main'
+    mock_branch = mock.MagicMock()
+    mock_branch.commit.sha = 'newsha'
+    mock_repo.get_branch.return_value = mock_branch
+    return mock_repo, mock_branch
+
+
+class GithubPullRoutingTest(TestCase):
+    def setUp(self):
+        self.user = mock.MagicMock()
+        self.project = mock.MagicMock()
+        self.project.github_repo = 'owner/repo'
+        self.project.github_branch = 'main'
+        self.project.github_last_commit = 'oldsha'
+        self.project.github_hook_force = False
+
+    @mock.patch('ide.git.git_verify_tokens', return_value=True)
+    @mock.patch('ide.tasks.git._github_pull_full')
+    @mock.patch('ide.tasks.git.get_github')
+    def test_force_pull_uses_full(self, mock_get_github, mock_full, mock_verify):
+        mock_repo, mock_branch = _mock_github()
+        mock_get_github.return_value.get_repo.return_value = mock_repo
+        mock_full.return_value = True
+
+        result = github_pull(self.user, self.project, force=True)
+        mock_full.assert_called_once()
+        self.assertTrue(result)
+
+    @mock.patch('ide.git.git_verify_tokens', return_value=True)
+    @mock.patch('ide.tasks.git._github_pull_full')
+    @mock.patch('ide.tasks.git.get_github')
+    def test_no_previous_commit_uses_full(self, mock_get_github, mock_full, mock_verify):
+        self.project.github_last_commit = None
+        mock_repo, mock_branch = _mock_github()
+        mock_get_github.return_value.get_repo.return_value = mock_repo
+        mock_full.return_value = True
+
+        result = github_pull(self.user, self.project, force=False)
+        mock_full.assert_called_once()
+
+    @mock.patch('ide.git.git_verify_tokens', return_value=True)
+    @mock.patch('ide.tasks.git._github_pull_delta')
+    @mock.patch('ide.tasks.git._github_pull_full')
+    @mock.patch('ide.tasks.git.get_github')
+    def test_delta_sync_when_not_forced(self, mock_get_github, mock_full, mock_delta, mock_verify):
+        mock_repo, mock_branch = _mock_github()
+        mock_get_github.return_value.get_repo.return_value = mock_repo
+        mock_delta.return_value = True
+
+        result = github_pull(self.user, self.project, force=False)
+        mock_delta.assert_called_once_with(self.user, self.project, mock_repo, 'newsha')
+        mock_full.assert_not_called()
+        self.assertTrue(result)
+
+    @mock.patch('ide.git.git_verify_tokens', return_value=True)
+    @mock.patch('ide.tasks.git._github_pull_delta')
+    @mock.patch('ide.tasks.git._github_pull_full')
+    @mock.patch('ide.tasks.git.get_github')
+    def test_falls_back_to_full_on_delta_failure(self, mock_get_github, mock_full, mock_delta, mock_verify):
+        mock_repo, mock_branch = _mock_github()
+        mock_get_github.return_value.get_repo.return_value = mock_repo
+        mock_delta.side_effect = Exception('compare API failed')
+        mock_full.return_value = True
+
+        result = github_pull(self.user, self.project, force=False)
+        mock_full.assert_called_once_with(self.user, self.project, mock_repo, mock_branch)
+        self.assertTrue(result)
+
+    @mock.patch('ide.git.git_verify_tokens', return_value=True)
+    @mock.patch('ide.tasks.git.get_github')
+    def test_returns_false_when_no_new_commits(self, mock_get_github, mock_verify):
+        mock_repo = mock.MagicMock()
+        mock_repo.default_branch = 'main'
+        mock_branch = mock.MagicMock()
+        mock_branch.commit.sha = 'oldsha'
+        mock_repo.get_branch.return_value = mock_branch
+        mock_get_github.return_value.get_repo.return_value = mock_repo
+
+        result = github_pull(self.user, self.project, force=False)
+        self.assertFalse(result)
+
+    @mock.patch('ide.git.git_verify_tokens', return_value=True)
+    @mock.patch('ide.tasks.git.get_github')
+    def test_raises_when_no_repo_defined(self, mock_get_github, mock_verify):
+        self.project.github_repo = None
+        mock_repo, mock_branch = _mock_github()
+        mock_get_github.return_value.get_repo.return_value = mock_repo
+
+        with self.assertRaises(Exception) as ctx:
+            github_pull(self.user, self.project, force=False)
+        self.assertIn('No GitHub repo defined', str(ctx.exception))
+
+    @mock.patch('ide.git.git_verify_tokens', return_value=True)
+    @mock.patch('ide.tasks.git.get_github')
+    def test_raises_when_branch_not_found(self, mock_get_github, mock_verify):
+        from github import GithubException
+        mock_repo = mock.MagicMock()
+        mock_repo.default_branch = 'main'
+        mock_repo.get_branch.side_effect = GithubException(404, 'Not Found', {})
+        mock_get_github.return_value.get_repo.return_value = mock_repo
+
+        with self.assertRaises(Exception) as ctx:
+            github_pull(self.user, self.project, force=False)
+        self.assertIn('Unable to get the branch', str(ctx.exception))
+
+
+class GithubPullDeltaTest(TestCase):
+    def setUp(self):
+        self.user = mock.MagicMock()
+        self.project = mock.MagicMock()
+        self.project.github_last_commit = 'oldsha'
+        self.project.resources_path = 'resources'
+        self.project.project_type = 'native'
+        self.repo = mock.MagicMock()
+
+    @mock.patch('ide.tasks.git._apply_delta_changes')
+    @mock.patch('ide.tasks.git.validate_resources_against_tree')
+    @mock.patch('ide.tasks.git.parse_manifest_from_tree')
+    @mock.patch('ide.tasks.git.get_root_path')
+    @mock.patch('ide.tasks.git.now')
+    def test_delta_pull_applies_changes(self, mock_now, mock_get_root, mock_parse, mock_validate, mock_apply):
+        mock_now.return_value = '2025-01-01T00:00:00Z'
+        comparison = mock.MagicMock()
+        comparison.ahead_by = 3
+        comparison.files = [mock.MagicMock(filename='src/main.c', status='modified')]
+        self.repo.compare.return_value = comparison
+
+        mock_commit = mock.MagicMock()
+        mock_commit.tree.sha = 'treesha'
+        self.repo.get_git_commit.return_value = mock_commit
+        mock_tree = mock.MagicMock()
+        mock_tree.tree = []
+        self.repo.get_git_tree.return_value = mock_tree
+
+        mock_parse.return_value = ('', {'projectType': 'native'})
+        mock_get_root.return_value = 'src/main.c'
+
+        result = _github_pull_delta(self.user, self.project, self.repo, 'newsha')
+        self.assertTrue(result)
+        mock_apply.assert_called_once()
+        self.assertEqual(self.project.github_last_commit, 'newsha')
+        self.project.save.assert_called()
+
+    @mock.patch('ide.tasks.git.now')
+    def test_delta_pull_returns_false_when_ahead_by_zero(self, mock_now):
+        mock_now.return_value = '2025-01-01T00:00:00Z'
+        comparison = mock.MagicMock()
+        comparison.ahead_by = 0
+        self.repo.compare.return_value = comparison
+
+        result = _github_pull_delta(self.user, self.project, self.repo, 'newsha')
+        self.assertFalse(result)
+        self.assertEqual(self.project.github_last_commit, 'newsha')
+
+
+class ApplyDeltaChangesTest(TestCase):
+    def _make_change(self, filename, status, sha=None, previous_filename=None):
+        change = mock.MagicMock()
+        change.filename = filename
+        change.status = status
+        change.sha = sha or 'abc123'
+        if previous_filename:
+            change.previous_filename = previous_filename
+        else:
+            change.previous_filename = None
+        return change
+
+    @mock.patch('ide.tasks.git._sync_resource_files_from_manifest')
+    @mock.patch('ide.tasks.git.load_manifest_dict')
+    @mock.patch('ide.tasks.git._upsert_source_file')
+    def test_applies_added_source_file(self, mock_upsert, mock_load, mock_sync):
+        mock_load.return_value = ({}, {}, {})
+        project = mock.MagicMock()
+        project.resources_path = 'resources'
+        project.project_type = 'native'
+        repo = mock.MagicMock()
+
+        change = self._make_change('src/main.c', 'added')
+        manifest = {'projectType': 'native', 'resources': {'media': []}}
+
+        with mock.patch('ide.tasks.git.transaction'):
+            _apply_delta_changes(project, repo, '', manifest, [change])
+
+        mock_upsert.assert_called_once()
+        self.assertEqual(mock_upsert.call_args[0][2].filename, 'src/main.c')
+
+    @mock.patch('ide.tasks.git._sync_resource_files_from_manifest')
+    @mock.patch('ide.tasks.git.load_manifest_dict')
+    @mock.patch('ide.tasks.git._remove_file_by_path')
+    def test_applies_removed_source_file(self, mock_remove, mock_load, mock_sync):
+        mock_load.return_value = ({}, {}, {})
+        project = mock.MagicMock()
+        project.resources_path = 'resources'
+        project.project_type = 'native'
+        repo = mock.MagicMock()
+
+        change = self._make_change('src/main.c', 'removed')
+        manifest = {'projectType': 'native', 'resources': {'media': []}}
+        existing_sources = {}
+        existing_resources = {}
+
+        with mock.patch('ide.tasks.git.transaction'):
+            with mock.patch('ide.tasks.git.SourceFile') as MockSF:
+                mock_qs = mock.MagicMock()
+                project.source_files.all.return_value = []
+                project.resources.all.return_value = []
+                _apply_delta_changes(project, repo, '', manifest, [change])
+
+        mock_remove.assert_called()
+
+    @mock.patch('ide.tasks.git._sync_resource_files_from_manifest')
+    @mock.patch('ide.tasks.git.load_manifest_dict')
+    @mock.patch('ide.tasks.git._remove_file_by_path')
+    @mock.patch('ide.tasks.git._upsert_source_file')
+    def test_handles_renamed_file(self, mock_upsert, mock_remove, mock_load, mock_sync):
+        mock_load.return_value = ({}, {}, {})
+        project = mock.MagicMock()
+        project.resources_path = 'resources'
+        project.project_type = 'native'
+        repo = mock.MagicMock()
+
+        change = self._make_change('src/new_main.c', 'renamed', previous_filename='src/old_main.c')
+        manifest = {'projectType': 'native', 'resources': {'media': []}}
+
+        with mock.patch('ide.tasks.git.transaction'):
+            with mock.patch('ide.tasks.git.SourceFile') as MockSF:
+                project.source_files.all.return_value = []
+                project.resources.all.return_value = []
+                _apply_delta_changes(project, repo, '', manifest, [change])
+
+        mock_remove.assert_called_once()
+        self.assertEqual(mock_remove.call_args[0][1], 'src/old_main.c')
+
+    @mock.patch('ide.tasks.git._sync_resource_files_from_manifest')
+    @mock.patch('ide.tasks.git.load_manifest_dict')
+    @mock.patch('ide.tasks.git.SourceFile')
+    def test_skips_unrecognized_source_file_path(self, MockSF, mock_load, mock_sync):
+        mock_load.return_value = ({}, {}, {})
+        project = mock.MagicMock()
+        project.resources_path = 'resources'
+        project.project_type = 'native'
+        repo = mock.MagicMock()
+
+        change = self._make_change('unknown/weird.dat', 'added')
+        manifest = {'projectType': 'native', 'resources': {'media': []}}
+
+        MockSF.get_details_for_path.side_effect = ValueError('bad path')
+
+        with mock.patch('ide.tasks.git.transaction'):
+            project.source_files.all.return_value = []
+            project.resources.all.return_value = []
+            _apply_delta_changes(project, repo, '', manifest, [change])
+
+        MockSF.objects.create.assert_not_called()
+
+    @mock.patch('ide.tasks.git._upsert_resource_variant')
+    @mock.patch('ide.tasks.git._sync_resource_files_from_manifest')
+    @mock.patch('ide.tasks.git.load_manifest_dict')
+    def test_routes_resource_file_to_upsert_resource_variant(self, mock_load, mock_sync, mock_upsert_resource):
+        mock_load.return_value = ({}, {}, {})
+        project = mock.MagicMock()
+        project.resources_path = 'resources'
+        project.project_type = 'native'
+        repo = mock.MagicMock()
+
+        change = self._make_change('resources/images/icon.png', 'added')
+        manifest = {'projectType': 'native', 'resources': {'media': []}}
+        tag_map = {}
+
+        with mock.patch('ide.tasks.git.transaction'):
+            with mock.patch('ide.tasks.git.ResourceVariant') as MockRV:
+                mock_rv_map = {v: k for k, v in MockRV.VARIANT_STRINGS.items() if v}
+                with mock.patch('ide.tasks.git.SourceFile'):
+                    project.source_files.all.return_value = []
+                    project.resources.all.return_value = []
+                    _apply_delta_changes(project, repo, '', manifest, [change])
+
+        mock_upsert_resource.assert_called_once()
+
+    @mock.patch('ide.tasks.git._sync_resource_files_from_manifest')
+    @mock.patch('ide.tasks.git.load_manifest_dict')
+    def test_updates_project_options_from_manifest(self, mock_load, mock_sync):
+        mock_load.return_value = ({
+            'app_long_name': 'My App',
+            'app_short_name': 'MyApp',
+        }, {}, {})
+        project = mock.MagicMock()
+        project.resources_path = 'resources'
+        project.project_type = 'native'
+        repo = mock.MagicMock()
+
+        manifest = {'projectType': 'native', 'resources': {'media': []}}
+
+        with mock.patch('ide.tasks.git.transaction'):
+            project.source_files.all.return_value = []
+            project.resources.all.return_value = []
+            _apply_delta_changes(project, repo, '', manifest, [])
+
+        project.full_clean.assert_called_once()
+        project.set_dependencies.assert_called_once_with({})
+
+
+class UpsertSourceFileTest(TestCase):
+    def test_creates_new_source_file_when_not_in_existing(self):
+        project = mock.MagicMock()
+        repo = mock.MagicMock()
+        existing_sources = {}
+
+        change = mock.MagicMock()
+        change.filename = 'src/main.c'
+        change.sha = 'abc123'
+
+        mock_source = mock.MagicMock()
+        mock_source.is_editable_text = True
+
+        contents = mock.MagicMock()
+        contents.encoding = None
+        contents.decoded_content = b'// hello'
+        repo.get_contents.return_value = contents
+
+        with mock.patch('ide.tasks.git.SourceFile') as MockSF:
+            MockSF.objects.create.return_value = mock_source
+            MockSF.get_details_for_path.return_value = ('main.c', 'app')
+            _upsert_source_file(project, repo, change, 'main.c', 'app', existing_sources)
+
+        MockSF.objects.create.assert_called_once_with(project=project, file_name='main.c', target='app')
+        mock_source.save_text.assert_called_once_with('// hello')
+
+    def test_updates_existing_source_file(self):
+        project = mock.MagicMock()
+        repo = mock.MagicMock()
+        existing_source = mock.MagicMock()
+        existing_source.is_editable_text = True
+        existing_sources = {'src/main.c': existing_source}
+
+        change = mock.MagicMock()
+        change.filename = 'src/main.c'
+        change.sha = 'def456'
+
+        contents = mock.MagicMock()
+        contents.encoding = None
+        contents.decoded_content = b'// updated'
+        repo.get_contents.return_value = contents
+
+        _upsert_source_file(project, repo, change, 'main.c', 'app', existing_sources)
+
+        existing_source.save_text.assert_called_once_with('// updated')
+
+    @mock.patch('ide.tasks.git._fetch_file_content')
+    def test_skips_when_content_is_none(self, mock_fetch):
+        project = mock.MagicMock()
+        repo = mock.MagicMock()
+        existing_sources = {}
+
+        change = mock.MagicMock()
+        change.filename = 'src/main.c'
+
+        mock_fetch.return_value = None
+
+        with mock.patch('ide.tasks.git.SourceFile') as MockSF:
+            _upsert_source_file(project, repo, change, 'main.c', 'app', existing_sources)
+            MockSF.objects.create.assert_not_called()
+
+
+class UpsertResourceVariantTest(TestCase):
+    def test_creates_new_resource_variant(self):
+        project = mock.MagicMock()
+        project.resources_path = 'resources'
+        repo = mock.MagicMock()
+
+        change = mock.MagicMock()
+        change.filename = 'resources/images/icon.png'
+        change.sha = 'abc123'
+
+        existing_resources = {}
+        tag_map = {}
+
+        contents = mock.MagicMock()
+        contents.encoding = None
+        contents.decoded_content = b'\x89PNG'
+        repo.get_contents.return_value = contents
+
+        mock_resource = mock.MagicMock()
+        mock_variant = mock.MagicMock()
+
+        with mock.patch('ide.tasks.git.ResourceFile') as MockRF:
+            with mock.patch('ide.tasks.git.ResourceVariant') as MockRV:
+                with mock.patch('ide.tasks.git.ResourceVariant.VARIANT_STRINGS', {}):
+                    MockRF.objects.create.return_value = mock_resource
+                    MockRV.objects.filter.return_value.first.return_value = None
+                    MockRV.objects.create.return_value = mock_variant
+
+                    _upsert_resource_variant(project, repo, change, existing_resources, tag_map)
+
+        MockRF.objects.create.assert_called_once()
+        mock_variant.save_file.assert_called_once()
+
+    def test_adds_variant_to_existing_resource(self):
+        project = mock.MagicMock()
+        project.resources_path = 'resources'
+        repo = mock.MagicMock()
+
+        change = mock.MagicMock()
+        change.filename = 'resources/images/icon.png'
+        change.sha = 'abc123'
+
+        existing_resource = mock.MagicMock()
+        existing_resources = {'images/icon.png': existing_resource}
+        tag_map = {}
+
+        contents = mock.MagicMock()
+        contents.encoding = None
+        contents.decoded_content = b'\x89PNG'
+        repo.get_contents.return_value = contents
+
+        mock_variant = mock.MagicMock()
+
+        with mock.patch('ide.tasks.git.ResourceFile') as MockRF:
+            with mock.patch('ide.tasks.git.ResourceVariant') as MockRV:
+                with mock.patch('ide.tasks.git.ResourceVariant.VARIANT_STRINGS', {}):
+                    MockRV.objects.filter.return_value.first.return_value = None
+                    MockRV.objects.create.return_value = mock_variant
+
+                    _upsert_resource_variant(project, repo, change, existing_resources, tag_map)
+
+        MockRF.objects.create.assert_not_called()
+        mock_variant.save_file.assert_called_once()

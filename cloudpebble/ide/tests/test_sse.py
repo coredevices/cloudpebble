@@ -168,27 +168,37 @@ class TestHookedCommitEvents(TestCase):
             github_repo='owner/repo', github_branch='main',
             github_last_commit='oldsha', github_hook_build=False,
         )
+        mock_pull.return_value = True
         hooked_commit(project.id, 'newsha')
-        publish_calls = [call[0] for call in mock_publish.call_args_list]
-        self.assertEqual(publish_calls[0], (project.id, 'pull_start'))
-        self.assertEqual(publish_calls[1][0], project.id)
-        self.assertEqual(publish_calls[1][1], 'pull_complete')
+        publish_calls = mock_publish.call_args_list
+        self.assertEqual(publish_calls[0][0], (project.id, 'pull_start'))
+        self.assertEqual(publish_calls[1][0][0], project.id)
+        self.assertEqual(publish_calls[1][0][1], 'pull_complete')
+        self.assertIn('github_last_commit', publish_calls[1][1])
 
     @mock.patch('ide.tasks.git.publish_event')
     @mock.patch('ide.tasks.git.run_compile')
     @mock.patch('ide.tasks.git.github_pull')
     def test_publishes_build_start_when_auto_build(self, mock_pull, mock_compile, mock_publish):
         from ide.models.project import Project
+        from ide.models.build import BuildResult
         user = User.objects.create_user('hooktest2', 'hook2@test.test', 'testpass')
         project = Project.objects.create(
             owner=user, name='hookproj2',
             github_repo='owner/repo', github_branch='main',
             github_last_commit='oldsha', github_hook_build=True,
         )
+        mock_pull.return_value = True
         hooked_commit(project.id, 'newsha')
-        publish_calls = [call[0] for call in mock_publish.call_args_list]
-        types = [c[1] for c in publish_calls]
-        self.assertIn('build_start', types)
+        build_start_call = None
+        for call in mock_publish.call_args_list:
+            if call[0][1] == 'build_start':
+                build_start_call = call
+                break
+        self.assertIsNotNone(build_start_call)
+        self.assertEqual(build_start_call[0][0], project.id)
+        self.assertIn('build_id', build_start_call[1])
+        self.assertIsInstance(build_start_call[1]['build_id'], int)
 
     @mock.patch('ide.tasks.git.publish_event')
     @mock.patch('ide.tasks.git.github_pull')
@@ -201,11 +211,44 @@ class TestHookedCommitEvents(TestCase):
             github_last_commit='oldsha', github_hook_build=False,
         )
         mock_pull.side_effect = Exception('pull failed')
-        with self.assertRaises(Exception):
+        with self.assertRaises(Exception) as ctx:
             hooked_commit(project.id, 'newsha')
+        self.assertEqual(str(ctx.exception), 'pull failed')
         types = [call[0][1] for call in mock_publish.call_args_list]
-        self.assertIn('pull_start', types)
-        self.assertIn('pull_failed', types)
+        self.assertEqual(types, ['pull_start', 'pull_failed'])
+
+    @mock.patch('ide.tasks.git.publish_event')
+    @mock.patch('ide.tasks.git.run_compile')
+    @mock.patch('ide.tasks.git.github_pull')
+    def test_no_pull_events_when_commit_unchanged(self, mock_pull, mock_compile, mock_publish):
+        from ide.models.project import Project
+        user = User.objects.create_user('hooknoch', 'hooknoch@test.test', 'testpass')
+        project = Project.objects.create(
+            owner=user, name='hooknoch',
+            github_repo='owner/repo', github_branch='main',
+            github_last_commit='samesha', github_hook_build=False,
+        )
+        result = hooked_commit(project.id, 'samesha')
+        self.assertFalse(result)
+        mock_publish.assert_not_called()
+        mock_pull.assert_not_called()
+
+    @mock.patch('ide.tasks.git.publish_event')
+    @mock.patch('ide.tasks.git.run_compile')
+    @mock.patch('ide.tasks.git.github_pull')
+    def test_skip_build_when_auto_build_disabled(self, mock_pull, mock_compile, mock_publish):
+        from ide.models.project import Project
+        user = User.objects.create_user('hooknobuild', 'hooknobuild@test.test', 'testpass')
+        project = Project.objects.create(
+            owner=user, name='hooknobuild',
+            github_repo='owner/repo', github_branch='main',
+            github_last_commit='oldsha', github_hook_build=False,
+        )
+        mock_pull.return_value = True
+        hooked_commit(project.id, 'newsha')
+        types = [call[0][1] for call in mock_publish.call_args_list]
+        self.assertNotIn('build_start', types)
+        mock_compile.assert_not_called()
 
 
 class TestRunCompileEvents(TestCase):

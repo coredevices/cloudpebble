@@ -3,6 +3,31 @@ CloudPebble.Events = (function() {
     var reconnectTimer = null;
     var RECONNECT_DELAY = 3000;
 
+    var handlers = {
+        handlePullStart: function() {
+            CloudPebble.Sidebar.SetIcon('github', 'refresh');
+            CloudPebble.GitHub.OnPullStart();
+        },
+        handlePullComplete: function(e) {
+            CloudPebble.Sidebar.ClearIcon('github');
+            CloudPebble.GitHub.OnPullComplete(JSON.parse(e.data));
+        },
+        handlePullFailed: function() {
+            CloudPebble.Sidebar.ClearIcon('github');
+            CloudPebble.GitHub.OnPullFailed();
+        },
+        handleBuildStart: function(e) {
+            var data = JSON.parse(e.data);
+            CloudPebble.Sidebar.SetIcon('compile', 'refresh');
+            CloudPebble.Compile.OnBuildStart(data.build_id);
+        },
+        handleBuildComplete: function(e) {
+            var data = JSON.parse(e.data);
+            CloudPebble.Sidebar.ClearIcon('compile');
+            CloudPebble.Compile.OnBuildComplete(data.build_id, data.state);
+        }
+    };
+
     var connect = function() {
         if (source) {
             source.close();
@@ -10,32 +35,11 @@ CloudPebble.Events = (function() {
 
         source = new EventSource('/ide/project/' + PROJECT_ID + '/events');
 
-        source.addEventListener('pull_start', function() {
-            CloudPebble.Sidebar.SetIcon('github', 'refresh');
-            CloudPebble.GitHub.OnPullStart();
-        });
-
-        source.addEventListener('pull_complete', function(e) {
-            CloudPebble.Sidebar.ClearIcon('github');
-            CloudPebble.GitHub.OnPullComplete(JSON.parse(e.data));
-        });
-
-        source.addEventListener('pull_failed', function() {
-            CloudPebble.Sidebar.ClearIcon('github');
-            CloudPebble.GitHub.OnPullFailed();
-        });
-
-        source.addEventListener('build_start', function(e) {
-            var data = JSON.parse(e.data);
-            CloudPebble.Sidebar.SetIcon('compile', 'refresh');
-            CloudPebble.Compile.OnBuildStart(data.build_id);
-        });
-
-        source.addEventListener('build_complete', function(e) {
-            var data = JSON.parse(e.data);
-            CloudPebble.Sidebar.ClearIcon('compile');
-            CloudPebble.Compile.OnBuildComplete(data.build_id, data.state);
-        });
+        source.addEventListener('pull_start', handlers.handlePullStart);
+        source.addEventListener('pull_complete', handlers.handlePullComplete);
+        source.addEventListener('pull_failed', handlers.handlePullFailed);
+        source.addEventListener('build_start', handlers.handleBuildStart);
+        source.addEventListener('build_complete', handlers.handleBuildComplete);
 
         source.onerror = function() {
             if (source.readyState === EventSource.CLOSED) {
@@ -53,6 +57,11 @@ CloudPebble.Events = (function() {
             if (reconnectTimer) clearTimeout(reconnectTimer);
             if (source) source.close();
             source = null;
-        }
+        },
+        handlePullStart: handlers.handlePullStart,
+        handlePullComplete: handlers.handlePullComplete,
+        handlePullFailed: handlers.handlePullFailed,
+        handleBuildStart: handlers.handleBuildStart,
+        handleBuildComplete: handlers.handleBuildComplete
     };
 })();
