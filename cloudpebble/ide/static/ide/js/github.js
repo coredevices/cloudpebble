@@ -260,7 +260,7 @@ CloudPebble.GitHub = (function() {
         },
         OnPullComplete: function(data) {
             $('#github-push-btn, #github-pull-btn').removeAttr('disabled');
-            var lastSync = data && data.github_last_commit ? data.github_last_commit : '';
+            var lastSync = data && data.github_last_sync ? data.github_last_sync : '';
             $('#github-last-sync').text(lastSync ? interpolate(gettext('Last synced: %s'), [lastSync]) : gettext('Pull completed.'));
             CloudPebble.Sidebar.Refresh();
         },

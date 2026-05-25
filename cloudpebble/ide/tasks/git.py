@@ -873,7 +873,7 @@ def hooked_commit(project_id, target_commit):
         publish_event(project_id, 'pull_start')
         try:
             github_pull(project.owner, project, force=project.github_hook_force)
-            publish_event(project_id, 'pull_complete', github_last_commit=project.github_last_commit or '')
+            publish_event(project_id, 'pull_complete', github_last_commit=project.github_last_commit or '', github_last_sync=str(project.github_last_sync) if project.github_last_sync else '')
         except Exception:
             publish_event(project_id, 'pull_failed')
             raise

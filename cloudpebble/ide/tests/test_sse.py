@@ -70,14 +70,14 @@ class TestSSEEventStream(TestCase):
         stream.pubsub.messages = [
             {'type': 'subscribe', 'data': b''},
             {'type': 'message', 'data': b'{"type":"pull_start"}'},
-            {'type': 'message', 'data': b'{"type":"pull_complete","github_last_commit":"abc123"}'},
+            {'type': 'message', 'data': b'{"type":"pull_complete","github_last_commit":"abc123","github_last_sync":"2025-01-01"}'},
         ]
         results = []
         for item in stream:
             results.append(item)
         self.assertEqual(len(results), 2)
         self.assertEqual(results[0], 'event: pull_start\ndata: {}\n\n')
-        self.assertEqual(results[1], 'event: pull_complete\ndata: {"github_last_commit": "abc123"}\n\n')
+        self.assertEqual(results[1], 'event: pull_complete\ndata: {"github_last_commit": "abc123", "github_last_sync": "2025-01-01"}\n\n')
 
     def test_stream_skips_non_message_types(self):
         stream = SSEEventStream.__new__(SSEEventStream)
@@ -176,6 +176,7 @@ class TestHookedCommitEvents(TestCase):
         self.assertEqual(publish_calls[1][0][0], project.id)
         self.assertEqual(publish_calls[1][0][1], 'pull_complete')
         self.assertIn('github_last_commit', publish_calls[1][1])
+        self.assertIn('github_last_sync', publish_calls[1][1])
 
     @mock.patch('ide.tasks.git.publish_event')
     @mock.patch('ide.tasks.git.run_compile')
