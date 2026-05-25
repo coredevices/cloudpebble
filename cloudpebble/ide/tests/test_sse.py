@@ -61,6 +61,20 @@ class TestPublishEvent(TestCase):
         self.assertEqual(data['build_id'], 99)
         self.assertEqual(data['state'], 'succeeded')
 
+    @mock.patch('utils.events.redis_client')
+    def test_publish_event_survives_redis_error(self, mock_redis):
+        import redis as redis_lib
+        mock_redis.publish.side_effect = redis_lib.ConnectionError("Connection refused")
+        publish_event(42, 'pull_start')
+        mock_redis.publish.assert_called_once()
+
+    @mock.patch('utils.events.redis_client')
+    def test_publish_event_survives_generic_redis_error(self, mock_redis):
+        import redis as redis_lib
+        mock_redis.publish.side_effect = redis_lib.RedisError("timeout")
+        publish_event(42, 'pull_start')
+        mock_redis.publish.assert_called_once()
+
 
 class TestSSEEventStream(TestCase):
     def test_stream_yields_formatted_messages(self):
