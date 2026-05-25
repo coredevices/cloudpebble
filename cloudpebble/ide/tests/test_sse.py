@@ -320,6 +320,23 @@ class TestDoGithubPullEvents(TestCase):
         types = [call[0][1] for call in mock_publish.call_args_list]
         self.assertEqual(types, ['pull_start', 'pull_failed'])
 
+    @mock.patch('ide.tasks.git.publish_event')
+    @mock.patch('ide.tasks.git.run_compile')
+    @mock.patch('ide.tasks.git.github_pull')
+    def test_no_auto_build_when_nothing_changed(self, mock_pull, mock_compile, mock_publish):
+        from ide.models.project import Project
+        user = User.objects.create_user('pulltest5', 'pull5@test.test', 'testpass')
+        project = Project.objects.create(
+            owner=user, name='pullproj5',
+            github_repo='owner/repo', github_branch='main',
+            github_last_commit='oldsha', github_hook_build=True,
+        )
+        mock_pull.return_value = False
+        do_github_pull(project.id)
+        types = [call[0][1] for call in mock_publish.call_args_list]
+        self.assertNotIn('build_start', types)
+        mock_compile.assert_not_called()
+
 
 class TestRunCompileEvents(TestCase):
     @mock.patch('ide.tasks.build.publish_event')

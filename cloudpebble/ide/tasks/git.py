@@ -852,13 +852,13 @@ def do_github_pull(project_id, force=False):
     project = Project.objects.select_related('owner__github').get(pk=project_id)
     publish_event(project_id, 'pull_start')
     try:
-        github_pull(project.owner, project, force=force)
+        changed = github_pull(project.owner, project, force=force)
         publish_event(project_id, 'pull_complete', github_last_commit=project.github_last_commit or '')
     except Exception:
         publish_event(project_id, 'pull_failed')
         raise
 
-    if project.github_hook_build:
+    if changed and project.github_hook_build:
         build = BuildResult.objects.create(project=project)
         publish_event(project_id, 'build_start', build_id=build.id)
         run_compile(build.id)
