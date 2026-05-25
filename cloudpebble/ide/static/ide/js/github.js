@@ -258,25 +258,18 @@ CloudPebble.GitHub = (function() {
             show_github_pane();
         },
         OnPullStart: function() {
-            if (pane) {
-                pane.find('#github-push-btn, #github-pull-btn').attr('disabled', 'disabled');
-                pane.find('#github-last-sync').text(gettext('Pulling from GitHub...'));
-            }
+            $('#github-push-btn, #github-pull-btn').attr('disabled', 'disabled');
+            $('#github-last-sync').text(gettext('Pulling from GitHub...'));
         },
         OnPullComplete: function(data) {
-            if (pane) {
-                pane.find('#github-push-btn, #github-pull-btn').removeAttr('disabled');
-                var lastSync = data && data.github_last_commit ? data.github_last_commit : '';
-                pane.find('#github-last-sync').text(lastSync ? interpolate(gettext('Last synced: %s'), [lastSync]) : gettext('Pull completed.'));
-                CloudPebble.Editor.GetUnsavedFiles = function() { return 0; };
-                window.location.reload(true);
-            }
+            $('#github-push-btn, #github-pull-btn').removeAttr('disabled');
+            var lastSync = data && data.github_last_commit ? data.github_last_commit : '';
+            $('#github-last-sync').text(lastSync ? interpolate(gettext('Last synced: %s'), [lastSync]) : gettext('Pull completed.'));
+            CloudPebble.Sidebar.Refresh();
         },
         OnPullFailed: function() {
-            if (pane) {
-                pane.find('#github-push-btn, #github-pull-btn').removeAttr('disabled');
-                pane.find('#github-last-sync').text(gettext('Pull failed.'));
-            }
+            $('#github-push-btn, #github-pull-btn').removeAttr('disabled');
+            $('#github-last-sync').text(gettext('Pull failed.'));
         }
     };
 })();

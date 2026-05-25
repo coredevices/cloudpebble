@@ -312,6 +312,28 @@ CloudPebble.Sidebar = (function() {
             if(type != 'alloy') {
                 $('.alloy-only').hide();
             }
+        },
+        Refresh: function() {
+            CloudPebble.Editor.GetUnsavedFiles = function() { return 0; };
+            $('#sidebar-sources').empty();
+            $('#sidebar-resources').empty();
+            create_initial_sections(CloudPebble.ProjectInfo.type);
+            Ajax.Get('/ide/project/' + PROJECT_ID + '/info').then(function(data) {
+                CloudPebble.ProjectInfo = data;
+                var is_alloy = data.type === 'alloy';
+                $.each(data.source_files, function(index, value) {
+                    if (is_alloy && value.target === 'embeddedjs' && value.is_binary) {
+                        if (CloudPebble.Resources && _.isFunction(CloudPebble.Resources.AddAlloyAsset)) {
+                            CloudPebble.Resources.AddAlloyAsset(value);
+                        }
+                        return;
+                    }
+                    CloudPebble.Editor.Add(value);
+                });
+                $.each(data.resources, function(index, value) {
+                    CloudPebble.Resources.Add(value);
+                });
+            });
         }
     };
 })();
