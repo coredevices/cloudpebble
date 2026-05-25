@@ -59,7 +59,7 @@ Then rebuild and restart:
 docker compose build && docker compose up -d
 ```
 
-Now you can browse CloudPebble at `http://localhost:8080` (Firebase login works) while GitHub can POST webhook callbacks to the ngrok URL.<tool_call>
+Now you can browse CloudPebble at `http://localhost:8080` (Firebase login works) while GitHub can POST webhook callbacks to the ngrok URL.
 
 ### Test GitHub Repo Sync locally
 

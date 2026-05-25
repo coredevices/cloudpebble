@@ -326,7 +326,7 @@ PEBBLEJS_BUILTIN_RESOURCES = frozenset({
 })
 
 
-def validate_resources_against_tree(paths_notags, manifest, project):
+def validate_resources_against_tree(paths_notags, manifest, project, root=''):
     """Validate that all resources referenced in the manifest exist in the tree.
 
     Given a set of tag-stripped paths from a git tree and a parsed manifest dict,
@@ -337,9 +337,10 @@ def validate_resources_against_tree(paths_notags, manifest, project):
 
     Raises Exception if a required resource is missing.
     """
-    resource_root = project.resources_path + '/'
-    manifest_resources = manifest.get('resources', {}).get('media', [])
-    project_type = manifest.get('projectType', 'native')
+    resource_root = ((root + '/' if root else '') + project.resources_path).rstrip('/') + '/'
+    pebble = manifest.get('pebble', manifest)
+    manifest_resources = pebble.get('resources', {}).get('media', [])
+    project_type = pebble.get('projectType', 'native')
 
     for resource in manifest_resources:
         path = resource_root + resource['file']
@@ -568,7 +569,7 @@ def _github_pull_delta(user, project, repo, new_commit_sha):
     except ValueError as e:
         raise ValueError("In manifest file: %s" % str(e))
 
-    validate_resources_against_tree(paths_notags, manifest, project)
+    validate_resources_against_tree(paths_notags, manifest, project, root)
 
     changed_files = comparison.files
     _apply_delta_changes(project, repo, root, manifest, changed_files)

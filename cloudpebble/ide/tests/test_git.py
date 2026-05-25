@@ -203,6 +203,65 @@ class ValidateResourcesAgainstTreeTest(TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]['name'], 'ICON')
 
+    def test_package_json_manifest_reads_resources_from_pebble_key(self):
+        paths_notags = {'src/resources/images/icon.png', 'src/main.c'}
+        manifest = {
+            'pebble': {
+                'projectType': 'native',
+                'resources': {'media': [
+                    {'file': 'images/icon.png', 'name': 'ICON', 'type': 'png'}
+                ]}
+            }
+        }
+        project = self._make_project(resources_path='src/resources')
+        result = validate_resources_against_tree(paths_notags, manifest, project)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['name'], 'ICON')
+
+    def test_package_json_pebble_skips_builtin_resources(self):
+        paths_notags = {'src/app.js'}
+        manifest = {
+            'pebble': {
+                'projectType': 'pebblejs',
+                'resources': {'media': [
+                    {'file': 'images/mono.png', 'name': 'MONO_FONT_14', 'type': 'font'},
+                    {'file': 'images/custom.png', 'name': 'CUSTOM_ICON', 'type': 'bitmap'},
+                ]}
+            }
+        }
+        project = self._make_project(project_type='pebblejs', resources_path='src/resources')
+        with self.assertRaises(Exception) as ctx:
+            validate_resources_against_tree(paths_notags, manifest, project)
+        self.assertIn('custom.png', str(ctx.exception))
+        self.assertNotIn('mono.png', str(ctx.exception))
+
+    def test_root_prefix_prepended_to_paths(self):
+        paths_notags = {'myproject/resources/images/icon.png', 'myproject/src/main.c'}
+        manifest = {
+            'resources': {'media': [
+                {'file': 'images/icon.png', 'name': 'ICON', 'type': 'png'}
+            ]}
+        }
+        project = self._make_project()
+        result = validate_resources_against_tree(paths_notags, manifest, project, root='myproject')
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['name'], 'ICON')
+
+    def test_root_prefix_with_package_json_manifest(self):
+        paths_notags = {'sdk-demo/src/resources/data/config.json', 'sdk-demo/src/main.c'}
+        manifest = {
+            'pebble': {
+                'projectType': 'native',
+                'resources': {'media': [
+                    {'file': 'data/config.json', 'name': 'CONFIG', 'type': 'raw'}
+                ]}
+            }
+        }
+        project = self._make_project(resources_path='src/resources')
+        result = validate_resources_against_tree(paths_notags, manifest, project, root='sdk-demo')
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['name'], 'CONFIG')
+
 
 class PebblejsBuiltinsTest(TestCase):
     def test_builtin_resource_names(self):
