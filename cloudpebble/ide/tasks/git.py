@@ -624,7 +624,7 @@ def _apply_delta_changes(project, repo, root, manifest, changed_files):
                     _remove_file_by_path(project, prev_project_path, existing_sources, existing_resources)
 
                 if project_path.startswith(project.resources_path + '/'):
-                    _upsert_resource_variant(project, repo, change, project_path, existing_resources, tag_map)
+                    _upsert_resource_variant(project, repo, change, project_path, existing_resources, tag_map, media_map)
                 else:
                     try:
                         base_filename, target = SourceFile.get_details_for_path(project.project_type, project_path)
@@ -662,7 +662,7 @@ def _upsert_source_file(project, repo, change, base_filename, target, existing_s
         source.save_string(content)
 
 
-def _upsert_resource_variant(project, repo, change, project_path, existing_resources, tag_map):
+def _upsert_resource_variant(project, repo, change, project_path, existing_resources, tag_map, media_map=None):
     """Create or update a ResourceVariant from a changed resource file in a GitHub comparison."""
     resource_root = project.resources_path + '/'
     base_filename = project_path[len(resource_root):]
@@ -677,6 +677,15 @@ def _upsert_resource_variant(project, repo, change, project_path, existing_resou
         resource_file = existing_resources[root_file_name]
     else:
         kind = _infer_resource_kind_from_path(root_file_name)
+        if media_map:
+            for resource in media_map:
+                try:
+                    _, manifest_root = get_filename_variant(resource['file'], tag_map)
+                except ValueError:
+                    manifest_root = os.path.splitext(resource['file'].split('~', 1)[0])[0] + os.path.splitext(resource['file'])[1]
+                if manifest_root == root_file_name:
+                    kind = resource['type']
+                    break
         file_name = _strip_resource_dir_prefix(root_file_name)
         resource_file = ResourceFile.objects.create(
             project=project, file_name=file_name, kind=kind)
@@ -760,6 +769,12 @@ def _sync_resource_files_from_manifest(project, media_map, existing_resources):
                 is_menu_icon=resource.get('menuIcon', False),
             )
             existing_resources[root_file_name] = resource_file
+        else:
+            resource_file = existing_resources[root_file_name]
+            if resource_file.kind != resource['type'] or resource_file.is_menu_icon != resource.get('menuIcon', False):
+                resource_file.kind = resource['type']
+                resource_file.is_menu_icon = resource.get('menuIcon', False)
+                resource_file.save()
 
         resource_file = existing_resources[root_file_name]
         target_platforms = json.dumps(resource['targetPlatforms']) if 'targetPlatforms' in resource else None

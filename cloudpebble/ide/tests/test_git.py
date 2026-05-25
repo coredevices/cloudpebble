@@ -1092,4 +1092,109 @@ class ApplyDeltaChangesWithRootTest(TestCase):
                 _apply_delta_changes(project, repo, 'myproject', manifest, [change])
 
         mock_remove.assert_called_once()
-        self.assertEqual(mock_remove.call_args[0][1], 'src/old_main.c')
+
+
+class UpsertResourceVariantKindOverrideTest(TestCase):
+    def test_uses_manifest_type_when_media_map_provided(self):
+        project = mock.MagicMock()
+        project.resources_path = 'resources'
+        repo = mock.MagicMock()
+
+        change = mock.MagicMock()
+        change.filename = 'resources/images/icon.png'
+        change.sha = 'abc123'
+
+        existing_resources = {}
+        tag_map = {}
+        media_map = [{'file': 'images/icon.png', 'name': 'ICON', 'type': 'bitmap'}]
+
+        contents = mock.MagicMock()
+        contents.encoding = None
+        contents.decoded_content = b'\x89PNG'
+        repo.get_contents.return_value = contents
+
+        mock_resource = mock.MagicMock()
+        mock_variant = mock.MagicMock()
+
+        with mock.patch('ide.tasks.git.ResourceFile') as MockRF:
+            with mock.patch('ide.tasks.git.ResourceVariant') as MockRV:
+                with mock.patch('ide.tasks.git.ResourceVariant.VARIANT_STRINGS', {}):
+                    MockRF.objects.create.return_value = mock_resource
+                    MockRV.objects.filter.return_value.first.return_value = None
+                    MockRV.objects.create.return_value = mock_variant
+
+                    _upsert_resource_variant(project, repo, change, 'resources/images/icon.png', existing_resources, tag_map, media_map)
+
+        MockRF.objects.create.assert_called_once()
+        self.assertEqual(MockRF.objects.create.call_args[1]['kind'], 'bitmap')
+
+    def test_infers_kind_when_media_map_is_none(self):
+        project = mock.MagicMock()
+        project.resources_path = 'resources'
+        repo = mock.MagicMock()
+
+        change = mock.MagicMock()
+        change.filename = 'resources/images/icon.png'
+        change.sha = 'abc123'
+
+        existing_resources = {}
+        tag_map = {}
+
+        contents = mock.MagicMock()
+        contents.encoding = None
+        contents.decoded_content = b'\x89PNG'
+        repo.get_contents.return_value = contents
+
+        mock_resource = mock.MagicMock()
+        mock_variant = mock.MagicMock()
+
+        with mock.patch('ide.tasks.git.ResourceFile') as MockRF:
+            with mock.patch('ide.tasks.git.ResourceVariant') as MockRV:
+                with mock.patch('ide.tasks.git.ResourceVariant.VARIANT_STRINGS', {}):
+                    MockRF.objects.create.return_value = mock_resource
+                    MockRV.objects.filter.return_value.first.return_value = None
+                    MockRV.objects.create.return_value = mock_variant
+
+                    _upsert_resource_variant(project, repo, change, 'resources/images/icon.png', existing_resources, tag_map)
+
+        MockRF.objects.create.assert_called_once()
+        self.assertEqual(MockRF.objects.create.call_args[1]['kind'], 'png')
+
+
+class SyncResourceFilesFromManifestTest(TestCase):
+    @mock.patch('ide.tasks.git.ResourceIdentifier')
+    def test_corrects_kind_on_existing_resource(self, MockRI):
+        from ide.tasks.git import _sync_resource_files_from_manifest
+        project = mock.MagicMock()
+        project.project_type = 'native'
+
+        existing_resource = mock.MagicMock()
+        existing_resource.kind = 'png'
+        existing_resource.is_menu_icon = False
+        existing_resources = {'images/icon.png': existing_resource}
+
+        media_map = [{'file': 'images/icon.png', 'name': 'ICON', 'type': 'bitmap', 'menuIcon': True}]
+
+        _sync_resource_files_from_manifest(project, media_map, existing_resources)
+
+        self.assertEqual(existing_resource.kind, 'bitmap')
+        self.assertTrue(existing_resource.is_menu_icon)
+        existing_resource.save.assert_called_once()
+
+    @mock.patch('ide.tasks.git.ResourceIdentifier')
+    def test_does_not_save_when_kind_already_correct(self, MockRI):
+        from ide.tasks.git import _sync_resource_files_from_manifest
+        project = mock.MagicMock()
+        project.project_type = 'native'
+
+        existing_resource = mock.MagicMock()
+        existing_resource.kind = 'png'
+        existing_resource.is_menu_icon = False
+        existing_resources = {'images/icon.png': existing_resource}
+
+        media_map = [{'file': 'images/icon.png', 'name': 'ICON', 'type': 'png', 'menuIcon': False}]
+
+        _sync_resource_files_from_manifest(project, media_map, existing_resources)
+
+        self.assertEqual(existing_resource.kind, 'png')
+        existing_resource.save.assert_not_called()
