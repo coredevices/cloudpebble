@@ -592,7 +592,6 @@ def _apply_delta_changes(project, repo, root, manifest, changed_files):
     or deletes only the affected SourceFile and ResourceFile/ResourceVariant
     records. All changes are wrapped in a single atomic transaction.
     """
-    manifest_content = json.dumps(manifest) if isinstance(manifest, dict) else manifest
     manifest_kind = 'package.json' if 'pebble' in manifest else 'appinfo.json'
     resource_root = ((root + '/' if root else '') + project.resources_path).rstrip('/') + '/'
 
