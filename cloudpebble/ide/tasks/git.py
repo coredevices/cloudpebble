@@ -638,7 +638,7 @@ def _apply_delta_changes(project, repo, root, manifest, changed_files):
 
         _sync_resource_files_from_manifest(project, media_map, existing_resources)
 
-    project.save()
+        project.save()
 
 
 def _upsert_source_file(project, repo, change, base_filename, target, existing_sources, project_path=None):
