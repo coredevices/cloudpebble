@@ -317,25 +317,32 @@ CloudPebble.Sidebar = (function() {
             }
         },
         Refresh: function() {
+            var saved_GetUnsavedFiles = CloudPebble.Editor.GetUnsavedFiles;
             CloudPebble.Editor.GetUnsavedFiles = function() { return 0; };
             $('#sidebar-sources').empty();
             $('#sidebar-resources').empty();
             create_initial_sections(CloudPebble.ProjectInfo.type);
-            Ajax.Get('/ide/project/' + PROJECT_ID + '/info').then(function(data) {
-                CloudPebble.ProjectInfo = data;
-                var is_alloy = data.type === 'alloy';
-                $.each(data.source_files, function(index, value) {
-                    if (is_alloy && value.target === 'embeddedjs' && value.is_binary) {
-                        if (CloudPebble.Resources && _.isFunction(CloudPebble.Resources.AddAlloyAsset)) {
-                            CloudPebble.Resources.AddAlloyAsset(value);
+            Ajax.Get('/ide/project/' + PROJECT_ID + '/info').done(function(data) {
+                try {
+                    CloudPebble.ProjectInfo = data;
+                    var is_alloy = data.type === 'alloy';
+                    $.each(data.source_files, function(index, value) {
+                        if (is_alloy && value.target === 'embeddedjs' && value.is_binary) {
+                            if (CloudPebble.Resources && _.isFunction(CloudPebble.Resources.AddAlloyAsset)) {
+                                CloudPebble.Resources.AddAlloyAsset(value);
+                            }
+                            return;
                         }
-                        return;
-                    }
-                    CloudPebble.Editor.Add(value);
-                });
-                $.each(data.resources, function(index, value) {
-                    CloudPebble.Resources.Add(value);
-                });
+                        CloudPebble.Editor.Add(value);
+                    });
+                    $.each(data.resources, function(index, value) {
+                        CloudPebble.Resources.Add(value);
+                    });
+                } finally {
+                    CloudPebble.Editor.GetUnsavedFiles = saved_GetUnsavedFiles;
+                }
+            }).fail(function() {
+                CloudPebble.Editor.GetUnsavedFiles = saved_GetUnsavedFiles;
             });
         }
     };
