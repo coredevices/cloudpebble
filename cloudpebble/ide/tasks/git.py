@@ -594,7 +594,7 @@ def _apply_delta_changes(project, repo, root, manifest, changed_files):
     """
     manifest_content = json.dumps(manifest) if isinstance(manifest, dict) else manifest
     manifest_kind = 'package.json' if 'pebble' in manifest else 'appinfo.json'
-    resource_root = project.resources_path + '/'
+    resource_root = ((root + '/' if root else '') + project.resources_path).rstrip('/') + '/'
 
     with transaction.atomic():
         project_options, media_map, dependencies = load_manifest_dict(manifest, manifest_kind)
@@ -612,37 +612,40 @@ def _apply_delta_changes(project, repo, root, manifest, changed_files):
         for change in changed_files:
             filename = change.filename
             status = change.status
+            project_path = filename[len(root) + 1:] if root and filename.startswith(root + '/') else filename
 
             if status in ('added', 'modified', 'renamed'):
                 if status == 'renamed' and change.previous_filename:
-                    _remove_file_by_path(project, change.previous_filename, existing_sources, existing_resources)
+                    prev_project_path = change.previous_filename[len(root) + 1:] if root and change.previous_filename.startswith(root + '/') else change.previous_filename
+                    _remove_file_by_path(project, prev_project_path, existing_sources, existing_resources)
 
-                if filename.startswith(resource_root):
-                    _upsert_resource_variant(project, repo, change, existing_resources, tag_map)
+                if project_path.startswith(project.resources_path + '/'):
+                    _upsert_resource_variant(project, repo, change, project_path, existing_resources, tag_map)
                 else:
                     try:
-                        base_filename, target = SourceFile.get_details_for_path(project.project_type, filename)
-                        _upsert_source_file(project, repo, change, base_filename, target, existing_sources)
+                        base_filename, target = SourceFile.get_details_for_path(project.project_type, project_path)
+                        _upsert_source_file(project, repo, change, base_filename, target, existing_sources, project_path)
                     except ValueError:
                         logger.debug("Skipping unrecognized file in delta: %s", filename)
                         continue
 
             elif status == 'removed':
-                _remove_file_by_path(project, filename, existing_sources, existing_resources)
+                _remove_file_by_path(project, project_path, existing_sources, existing_resources)
 
         _sync_resource_files_from_manifest(project, media_map, existing_resources)
 
     project.save()
 
 
-def _upsert_source_file(project, repo, change, base_filename, target, existing_sources):
+def _upsert_source_file(project, repo, change, base_filename, target, existing_sources, project_path=None):
     """Create or update a SourceFile from a changed file in a GitHub comparison."""
     content = _fetch_file_content(repo, change)
     if content is None:
         logger.warning("Could not fetch content for %s, skipping", change.filename)
         return
 
-    project_path = change.filename
+    if project_path is None:
+        project_path = change.filename
     if project_path in existing_sources:
         source = existing_sources[project_path]
     else:
@@ -655,10 +658,10 @@ def _upsert_source_file(project, repo, change, base_filename, target, existing_s
         source.save_string(content)
 
 
-def _upsert_resource_variant(project, repo, change, existing_resources, tag_map):
+def _upsert_resource_variant(project, repo, change, project_path, existing_resources, tag_map):
     """Create or update a ResourceVariant from a changed resource file in a GitHub comparison."""
     resource_root = project.resources_path + '/'
-    base_filename = change.filename[len(resource_root):]
+    base_filename = project_path[len(resource_root):]
     try:
         tags, root_file_name = get_filename_variant(base_filename, tag_map)
     except ValueError:

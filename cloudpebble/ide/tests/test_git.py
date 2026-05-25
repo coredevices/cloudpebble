@@ -946,7 +946,7 @@ class UpsertResourceVariantTest(TestCase):
                     MockRV.objects.filter.return_value.first.return_value = None
                     MockRV.objects.create.return_value = mock_variant
 
-                    _upsert_resource_variant(project, repo, change, existing_resources, tag_map)
+                    _upsert_resource_variant(project, repo, change, 'resources/images/icon.png', existing_resources, tag_map)
 
         MockRF.objects.create.assert_called_once()
         mock_variant.save_file.assert_called_once()
@@ -977,7 +977,91 @@ class UpsertResourceVariantTest(TestCase):
                     MockRV.objects.filter.return_value.first.return_value = None
                     MockRV.objects.create.return_value = mock_variant
 
-                    _upsert_resource_variant(project, repo, change, existing_resources, tag_map)
+                    _upsert_resource_variant(project, repo, change, 'resources/images/icon.png', existing_resources, tag_map)
 
         MockRF.objects.create.assert_not_called()
         mock_variant.save_file.assert_called_once()
+
+
+class ApplyDeltaChangesWithRootTest(TestCase):
+    def _make_change(self, filename, status, sha=None, previous_filename=None):
+        change = mock.MagicMock()
+        change.filename = filename
+        change.status = status
+        change.sha = sha or 'abc123'
+        if previous_filename:
+            change.previous_filename = previous_filename
+        else:
+            change.previous_filename = None
+        return change
+
+    @mock.patch('ide.tasks.git._sync_resource_files_from_manifest')
+    @mock.patch('ide.tasks.git.load_manifest_dict')
+    @mock.patch('ide.tasks.git._upsert_source_file')
+    def test_strips_root_from_source_file_path(self, mock_upsert, mock_load, mock_sync):
+        mock_load.return_value = ({}, {}, {})
+        project = mock.MagicMock()
+        project.resources_path = 'resources'
+        project.project_type = 'native'
+        repo = mock.MagicMock()
+
+        change = self._make_change('myproject/src/main.c', 'added')
+        manifest = {'projectType': 'native', 'resources': {'media': []}}
+
+        with mock.patch('ide.tasks.git.transaction'):
+            with mock.patch('ide.tasks.git.SourceFile') as MockSF:
+                MockSF.get_details_for_path.return_value = ('main.c', 'app')
+                project.source_files.all.return_value = []
+                project.resources.all.return_value = []
+                _apply_delta_changes(project, repo, 'myproject', manifest, [change])
+
+        mock_upsert.assert_called_once()
+        self.assertEqual(mock_upsert.call_args[0][6], 'src/main.c')
+
+    @mock.patch('ide.tasks.git._sync_resource_files_from_manifest')
+    @mock.patch('ide.tasks.git.load_manifest_dict')
+    @mock.patch('ide.tasks.git._upsert_resource_variant')
+    def test_strips_root_from_resource_file_path(self, mock_upsert_resource, mock_load, mock_sync):
+        mock_load.return_value = ({}, {}, {})
+        project = mock.MagicMock()
+        project.resources_path = 'resources'
+        project.project_type = 'native'
+        repo = mock.MagicMock()
+
+        change = self._make_change('myproject/resources/images/icon.png', 'added')
+        manifest = {'projectType': 'native', 'resources': {'media': []}}
+
+        with mock.patch('ide.tasks.git.transaction'):
+            with mock.patch('ide.tasks.git.ResourceVariant') as MockRV:
+                mock_rv_map = {v: k for k, v in MockRV.VARIANT_STRINGS.items() if v}
+                with mock.patch('ide.tasks.git.SourceFile'):
+                    project.source_files.all.return_value = []
+                    project.resources.all.return_value = []
+                    _apply_delta_changes(project, repo, 'myproject', manifest, [change])
+
+        mock_upsert_resource.assert_called_once()
+        self.assertEqual(mock_upsert_resource.call_args[0][3], 'resources/images/icon.png')
+
+    @mock.patch('ide.tasks.git._sync_resource_files_from_manifest')
+    @mock.patch('ide.tasks.git.load_manifest_dict')
+    @mock.patch('ide.tasks.git._remove_file_by_path')
+    @mock.patch('ide.tasks.git._upsert_source_file')
+    def test_strips_root_from_renamed_previous_filename(self, mock_upsert, mock_remove, mock_load, mock_sync):
+        mock_load.return_value = ({}, {}, {})
+        project = mock.MagicMock()
+        project.resources_path = 'resources'
+        project.project_type = 'native'
+        repo = mock.MagicMock()
+
+        change = self._make_change('myproject/src/new_main.c', 'renamed', previous_filename='myproject/src/old_main.c')
+        manifest = {'projectType': 'native', 'resources': {'media': []}}
+
+        with mock.patch('ide.tasks.git.transaction'):
+            with mock.patch('ide.tasks.git.SourceFile') as MockSF:
+                MockSF.get_details_for_path.return_value = ('new_main.c', 'app')
+                project.source_files.all.return_value = []
+                project.resources.all.return_value = []
+                _apply_delta_changes(project, repo, 'myproject', manifest, [change])
+
+        mock_remove.assert_called_once()
+        self.assertEqual(mock_remove.call_args[0][1], 'src/old_main.c')
