@@ -607,7 +607,11 @@ def _apply_delta_changes(project, repo, root, manifest, changed_files):
         tag_map = {v: k for k, v in ResourceVariant.VARIANT_STRINGS.items() if v}
 
         existing_sources = {s.project_path: s for s in project.source_files.all()}
-        existing_resources = {r.file_name: r for r in project.resources.all()}
+        existing_resources = {}
+        for r in project.resources.all():
+            dir_prefix = ResourceFile.DIR_MAP.get(r.kind, '') + '/'
+            root_file_name = dir_prefix + r.file_name if r.kind in ResourceFile.DIR_MAP else r.file_name
+            existing_resources[root_file_name] = r
 
         for change in changed_files:
             filename = change.filename

@@ -835,6 +835,34 @@ class ApplyDeltaChangesTest(TestCase):
 
     @mock.patch('ide.tasks.git._sync_resource_files_from_manifest')
     @mock.patch('ide.tasks.git.load_manifest_dict')
+    @mock.patch('ide.tasks.git._upsert_resource_variant')
+    @mock.patch('ide.tasks.git.SourceFile')
+    def test_existing_resources_keyed_by_manifest_path(self, MockSF, mock_upsert_resource, mock_load, mock_sync):
+        mock_load.return_value = ({}, {}, {})
+        project = mock.MagicMock()
+        project.resources_path = 'resources'
+        project.project_type = 'native'
+        repo = mock.MagicMock()
+
+        existing_resource = mock.MagicMock()
+        existing_resource.file_name = 'icon.png'
+        existing_resource.kind = 'png'
+        project.resources.all.return_value = [existing_resource]
+        project.source_files.all.return_value = []
+
+        change = self._make_change('resources/images/icon.png', 'modified')
+        manifest = {'projectType': 'native', 'resources': {'media': []}}
+
+        with mock.patch('ide.tasks.git.transaction'):
+            with mock.patch('ide.tasks.git.ResourceVariant') as MockRV:
+                mock_rv_map = {v: k for k, v in MockRV.VARIANT_STRINGS.items() if v}
+                _apply_delta_changes(project, repo, '', manifest, [change])
+
+        mock_upsert_resource.assert_called_once()
+        self.assertIs(mock_upsert_resource.call_args[0][4]['images/icon.png'], existing_resource)
+
+    @mock.patch('ide.tasks.git._sync_resource_files_from_manifest')
+    @mock.patch('ide.tasks.git.load_manifest_dict')
     def test_updates_project_options_from_manifest(self, mock_load, mock_sync):
         mock_load.return_value = ({
             'app_long_name': 'My App',
