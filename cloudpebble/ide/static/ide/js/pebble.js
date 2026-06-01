@@ -159,7 +159,12 @@ var SharedPebble = new (function() {
             return Promise.resolve();
         }
         USER_SETTINGS.firebase_token = idToken;
-        return Ajax.Post('/accounts/api/firebase-login', {
+        // Use firebase-refresh-token (not firebase-login): we're refreshing the
+        // token on an already-authenticated session, not signing in. firebase-login
+        // calls Django's login() which rotates the csrftoken cookie — doing that
+        // on every emulator launch invalidates the page's cached CSRF header and
+        // produces intermittent 403s on the next save/build.
+        return Ajax.Post('/accounts/api/firebase-refresh-token', {
             id_token: idToken
         }).catch(function(error) {
             console.warn("Failed to sync Firebase token to session:", error);

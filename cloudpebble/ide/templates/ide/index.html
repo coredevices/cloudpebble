@@ -201,6 +201,6 @@
 {% block scripts %}
 {{ alloy_templates|json_script:"alloy-template-data" }}
 <script src="/ide/jsi18n/"></script>
-<script src="{% static 'ide/js/csrf.js' %}" type="text/javascript"></script>
+<script src="{% static 'ide/js/csrf.js' %}?v=20260601" type="text/javascript"></script>
 <script src="{% static 'ide/js/project_list.js' %}?v=20260218b" type="text/javascript"></script>
 {% endblock %}
