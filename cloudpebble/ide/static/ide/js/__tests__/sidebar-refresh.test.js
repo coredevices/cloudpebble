@@ -72,7 +72,8 @@ function makeCloudPebble() {
     return {
         Editor: {
             GetUnsavedFiles: vi.fn(() => 3),
-            Add: vi.fn()
+            Add: vi.fn(),
+            ReloadActive: vi.fn(() => Promise.resolve())
         },
         Resources: {
             Add: vi.fn(),
@@ -184,5 +185,33 @@ describe('Sidebar.Refresh', () => {
             resources: [{ id: 1, file_name: 'icon.png' }]
         });
         expect(CloudPebble.Resources.Add).toHaveBeenCalledWith({ id: 1, file_name: 'icon.png' });
+    });
+
+    it('calls Editor.ReloadActive after a successful refresh', () => {
+        Sidebar.Refresh();
+        deferred.resolve({
+            type: 'native',
+            source_files: [],
+            resources: []
+        });
+        expect(CloudPebble.Editor.ReloadActive).toHaveBeenCalled();
+    });
+
+    it('does not call Editor.ReloadActive when the ajax request fails', () => {
+        Sidebar.Refresh();
+        deferred.reject();
+        expect(CloudPebble.Editor.ReloadActive).not.toHaveBeenCalled();
+    });
+
+    it('does not throw when Editor.ReloadActive is not provided', () => {
+        delete CloudPebble.Editor.ReloadActive;
+        Sidebar.Refresh();
+        expect(() => {
+            deferred.resolve({
+                type: 'native',
+                source_files: [],
+                resources: []
+            });
+        }).not.toThrow();
     });
 });

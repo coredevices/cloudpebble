@@ -519,12 +519,12 @@ CloudPebble.Editor = (function() {
             var check_safe = function() {
                 return Ajax.Get('/ide/project/' + PROJECT_ID + '/source/' + file.id + '/is_safe?modified=' + file.lastModified).then(function(data) {
                     if(!data.safe) {
-                        if(was_clean) {
+                        if(code_mirror.was_clean) {
                             code_mirror.setOption('readOnly', true);
                             return CloudPebble.Get('/ide/project/' + PROJECT_ID + '/source/' + file.id + '/load', function(data) {
                                 code_mirror.setValue(data.source);
                                 file.lastModified = data.modified;
-                                was_clean = true; // this will get reset to false by setValue.
+                                code_mirror.was_clean = true; // this will get reset to false by setValue.
                             }).finally(function() {
                                 code_mirror.setOption('readOnly', false);
                             });
@@ -552,24 +552,24 @@ CloudPebble.Editor = (function() {
                     }
                 },
                 onDestroy: function() {
-                    if(!was_clean) {
+                    if(!code_mirror.was_clean) {
                         --unsaved_files;
                     }
                     delete open_codemirrors[file.id];
                 }
             });
 
-            var was_clean = true;
+            code_mirror.was_clean = true;
             code_mirror.on('change', function() {
-                if(was_clean) {
+                if(code_mirror.was_clean) {
                     CloudPebble.Sidebar.SetIcon('source-' + file.id, 'edit');
-                    was_clean = false;
+                    code_mirror.was_clean = false;
                     ++unsaved_files;
                 }
             });
 
             var mark_clean = function() {
-                was_clean = true;
+                code_mirror.was_clean = true;
                 --unsaved_files;
                 CloudPebble.Sidebar.ClearIcon('source-' + file.id);
             };
@@ -1284,6 +1284,18 @@ CloudPebble.Editor = (function() {
         }
     }
 
+    var get_active_source_file_id = function() {
+        var pane_id = $('#main-pane').data('pane-id');
+        if (!pane_id || pane_id.indexOf('source-') !== 0) {
+            return null;
+        }
+        var file_id = parseInt(pane_id.substring('source-'.length), 10);
+        if (isNaN(file_id)) {
+            return null;
+        }
+        return file_id;
+    };
+
     return {
         Create: function() {
             create_source_file();
@@ -1311,6 +1323,37 @@ CloudPebble.Editor = (function() {
         },
         RenameFile: function(file, new_name) {
             return rename_file(file, new_name)
+        },
+        /**
+         * Re-fetch the source of the currently-active editor from the server and
+         * replace its buffer. No-op if the active pane isn't a source file, if
+         * the editor is currently detached, or if the buffer has unsaved local
+         * edits (we never clobber user work).
+         *
+         * Called from Sidebar.Refresh after a GitHub pull, so the user doesn't
+         * end up staring at a stale buffer for a file that just changed on
+         * the server.
+         */
+        ReloadActive: function() {
+            var file_id = get_active_source_file_id();
+            if (file_id === null) {
+                return Promise.resolve();
+            }
+            var code_mirror = open_codemirrors[file_id];
+            if (!code_mirror) {
+                return Promise.resolve();
+            }
+            if (!code_mirror.was_clean) {
+                return Promise.resolve();
+            }
+            return Ajax.Get('/ide/project/' + PROJECT_ID + '/source/' + file_id + '/load').then(function(data) {
+                code_mirror.setValue(data.source);
+                code_mirror.was_clean = true;
+                var file = project_source_files[code_mirror.file_path];
+                if (file) {
+                    file.lastModified = data.modified;
+                }
+            });
         }
     };
 })();

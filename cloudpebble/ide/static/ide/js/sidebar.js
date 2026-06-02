@@ -341,6 +341,11 @@ CloudPebble.Sidebar = (function() {
                 } finally {
                     CloudPebble.Editor.GetUnsavedFiles = saved_GetUnsavedFiles;
                 }
+                // Re-load the buffer for the currently-open file, if any, so
+                // the user isn't staring at stale content after a pull.
+                if (typeof CloudPebble.Editor.ReloadActive === 'function') {
+                    CloudPebble.Editor.ReloadActive();
+                }
             }).fail(function() {
                 CloudPebble.Editor.GetUnsavedFiles = saved_GetUnsavedFiles;
             });
