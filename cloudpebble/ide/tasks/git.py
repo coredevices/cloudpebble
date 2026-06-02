@@ -553,9 +553,10 @@ def _github_pull_delta(user, project, repo, new_commit_sha):
     comparison = repo.compare(project.github_last_commit, new_commit_sha)
 
     if comparison.ahead_by == 0:
-        project.github_last_commit = new_commit_sha
-        project.github_last_sync = now()
-        project.save()
+        with transaction.atomic():
+            project.github_last_commit = new_commit_sha
+            project.github_last_sync = now()
+            project.save()
         return False
 
     commit = repo.get_git_commit(new_commit_sha)
@@ -572,11 +573,7 @@ def _github_pull_delta(user, project, repo, new_commit_sha):
     validate_resources_against_tree(paths_notags, manifest, project, root)
 
     changed_files = comparison.files
-    _apply_delta_changes(project, repo, root, manifest, changed_files)
-
-    project.github_last_commit = new_commit_sha
-    project.github_last_sync = now()
-    project.save()
+    _apply_delta_changes(project, repo, root, manifest, changed_files, new_commit_sha)
 
     send_td_event('cloudpebble_github_pull', data={
         'data': {'repo': project.github_repo}
@@ -585,12 +582,14 @@ def _github_pull_delta(user, project, repo, new_commit_sha):
     return True
 
 
-def _apply_delta_changes(project, repo, root, manifest, changed_files):
+def _apply_delta_changes(project, repo, root, manifest, changed_files, new_commit_sha=None):
     """Apply incremental file changes to the project database without a full wipe.
 
     Given a list of changed files from GitHub's Compare API, creates, updates,
     or deletes only the affected SourceFile and ResourceFile/ResourceVariant
-    records. All changes are wrapped in a single atomic transaction.
+    records. All changes (including the github_last_commit / github_last_sync
+    update) are wrapped in a single atomic transaction, so the project either
+    advances fully to ``new_commit_sha`` or not at all.
     """
     manifest_kind = 'package.json' if 'pebble' in manifest else 'appinfo.json'
     resource_root = ((root + '/' if root else '') + project.resources_path).rstrip('/') + '/'
@@ -636,6 +635,10 @@ def _apply_delta_changes(project, repo, root, manifest, changed_files):
                 _remove_file_by_path(project, project_path, existing_sources, existing_resources)
 
         _sync_resource_files_from_manifest(project, media_map, existing_resources)
+
+        if new_commit_sha is not None:
+            project.github_last_commit = new_commit_sha
+            project.github_last_sync = now()
 
         project.save()
 

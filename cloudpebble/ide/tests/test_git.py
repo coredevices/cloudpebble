@@ -18,6 +18,7 @@ from ide.tasks.git import (
     _remove_file_by_path,
     github_pull,
     _github_pull_delta,
+    _github_pull_full,
     _apply_delta_changes,
     _upsert_source_file,
     _upsert_resource_variant,
@@ -691,6 +692,14 @@ class GithubPullDeltaTest(TestCase):
         mock_parse.return_value = ('', {'projectType': 'native'})
         mock_get_root.return_value = 'src/main.c'
 
+        # _apply_delta_changes is responsible for stamping the new SHA inside
+        # its atomic block; simulate that here.
+        def fake_apply(project, repo, root, manifest, changed_files, new_commit_sha=None):
+            project.github_last_commit = new_commit_sha
+            project.github_last_sync = mock_now.return_value
+            project.save()
+        mock_apply.side_effect = fake_apply
+
         result = _github_pull_delta(self.user, self.project, self.repo, 'newsha')
         self.assertTrue(result)
         mock_apply.assert_called_once()
@@ -1198,3 +1207,181 @@ class SyncResourceFilesFromManifestTest(TestCase):
 
         self.assertEqual(existing_resource.kind, 'png')
         existing_resource.save.assert_not_called()
+
+
+class GithubPullDeltaAtomicityTest(TestCase):
+    """Verifies that github_last_commit and github_last_sync are persisted in
+    the same atomic transaction as the file-content changes, so a partial
+    failure (or a worker kill) can never leave the project with new files but
+    the old SHA, which would cause the next pull to re-apply the same delta.
+    """
+
+    def setUp(self):
+        self.user = mock.MagicMock()
+        self.project = mock.MagicMock()
+        self.project.github_last_commit = 'oldsha'
+        self.project.resources_path = 'resources'
+        self.project.project_type = 'native'
+        self.repo = mock.MagicMock()
+
+    @mock.patch('ide.tasks.git._apply_delta_changes')
+    @mock.patch('ide.tasks.git.validate_resources_against_tree')
+    @mock.patch('ide.tasks.git.parse_manifest_from_tree')
+    @mock.patch('ide.tasks.git.get_root_path')
+    @mock.patch('ide.tasks.git.now')
+    def test_delta_pull_passes_new_commit_sha_to_apply_delta_changes(
+            self, mock_now, mock_get_root, mock_parse, mock_validate, mock_apply):
+        """The new SHA must be passed through so _apply_delta_changes can
+        stamp it inside the same atomic block as the file mutations."""
+        mock_now.return_value = '2025-01-01T00:00:00Z'
+        comparison = mock.MagicMock()
+        comparison.ahead_by = 3
+        comparison.files = [mock.MagicMock(filename='src/main.c', status='modified')]
+        self.repo.compare.return_value = comparison
+
+        mock_commit = mock.MagicMock()
+        mock_commit.tree.sha = 'treesha'
+        self.repo.get_git_commit.return_value = mock_commit
+        mock_tree = mock.MagicMock()
+        mock_tree.tree = []
+        self.repo.get_git_tree.return_value = mock_tree
+
+        mock_parse.return_value = ('', {'projectType': 'native'})
+        mock_get_root.return_value = 'src/main.c'
+
+        _github_pull_delta(self.user, self.project, self.repo, 'newsha')
+
+        mock_apply.assert_called_once()
+        args, kwargs = mock_apply.call_args
+        self.assertEqual(args[5], 'newsha')
+
+    @mock.patch('ide.tasks.git._sync_resource_files_from_manifest')
+    @mock.patch('ide.tasks.git.load_manifest_dict')
+    def test_apply_delta_changes_updates_github_last_commit_inside_atomic(
+            self, mock_load, mock_sync):
+        """When called with new_commit_sha, the SHA and last_sync must be
+        assigned and saved *inside* the transaction.atomic() block."""
+        mock_load.return_value = ({}, {}, {})
+        project = mock.MagicMock()
+        project.resources_path = 'resources'
+        project.project_type = 'native'
+        project.github_last_commit = 'oldsha'
+        repo = mock.MagicMock()
+
+        manifest = {'projectType': 'native', 'resources': {'media': []}}
+
+        # Use a context-manager spy that records the project state at __enter__
+        # and __exit__ so we can prove the SHA was set before the block exited.
+        captured = {}
+
+        class SpyAtomic:
+            def __enter__(self_inner):
+                captured['enter_github_last_commit'] = project.github_last_commit
+                return self_inner
+
+            def __exit__(self_inner, *args):
+                captured['exit_github_last_commit'] = project.github_last_commit
+                return False
+
+        with mock.patch('ide.tasks.git.transaction.atomic', return_value=SpyAtomic()):
+            project.source_files.all.return_value = []
+            project.resources.all.return_value = []
+            _apply_delta_changes(project, repo, '', manifest, [], new_commit_sha='newsha')
+
+        self.assertEqual(captured['enter_github_last_commit'], 'oldsha')
+        self.assertEqual(captured['exit_github_last_commit'], 'newsha')
+        self.assertIsNotNone(project.github_last_sync)
+
+    @mock.patch('ide.tasks.git._sync_resource_files_from_manifest')
+    @mock.patch('ide.tasks.git.load_manifest_dict')
+    def test_apply_delta_changes_does_not_touch_sha_when_omitted(
+            self, mock_load, mock_sync):
+        """When new_commit_sha is None (legacy call sites), the SHA must
+        not be silently overwritten."""
+        mock_load.return_value = ({}, {}, {})
+        project = mock.MagicMock()
+        project.resources_path = 'resources'
+        project.project_type = 'native'
+        project.github_last_commit = 'oldsha'
+        repo = mock.MagicMock()
+
+        manifest = {'projectType': 'native', 'resources': {'media': []}}
+
+        with mock.patch('ide.tasks.git.transaction'):
+            project.source_files.all.return_value = []
+            project.resources.all.return_value = []
+            _apply_delta_changes(project, repo, '', manifest, [])
+
+        self.assertEqual(project.github_last_commit, 'oldsha')
+
+    @mock.patch('ide.tasks.git._apply_delta_changes')
+    @mock.patch('ide.tasks.git.validate_resources_against_tree')
+    @mock.patch('ide.tasks.git.parse_manifest_from_tree')
+    @mock.patch('ide.tasks.git.get_root_path')
+    @mock.patch('ide.tasks.git.now')
+    @mock.patch('ide.tasks.git.transaction.atomic')
+    def test_delta_pull_ahead_by_zero_saves_inside_atomic(
+            self, mock_atomic, mock_now, mock_get_root, mock_parse, mock_validate, mock_apply):
+        """The 'no new commits' branch must also wrap its save in atomic()."""
+        mock_atomic.return_value.__enter__ = mock.MagicMock()
+        mock_atomic.return_value.__exit__ = mock.MagicMock(return_value=False)
+        mock_now.return_value = '2025-01-01T00:00:00Z'
+        comparison = mock.MagicMock()
+        comparison.ahead_by = 0
+        self.repo.compare.return_value = comparison
+
+        _github_pull_delta(self.user, self.project, self.repo, 'newsha')
+
+        mock_atomic.assert_called_once()
+        self.assertEqual(self.project.github_last_commit, 'newsha')
+
+
+class GithubPullFullAtomicityTest(TestCase):
+    """Verifies that _github_pull_full stamps the new SHA in an atomic block
+    after do_import_archive, so a project never ends up with new files but
+    the old github_last_commit.
+    """
+
+    def setUp(self):
+        self.user = mock.MagicMock()
+        self.project = mock.MagicMock()
+        self.project.github_last_commit = 'oldsha'
+        self.project.resources_path = 'resources'
+        self.project.project_type = 'native'
+        self.repo = mock.MagicMock()
+
+    @mock.patch('ide.tasks.git.do_import_archive')
+    @mock.patch('ide.tasks.git.validate_resources_against_tree')
+    @mock.patch('ide.tasks.git.parse_manifest_from_tree')
+    @mock.patch('ide.tasks.git.get_root_path')
+    @mock.patch('ide.tasks.git.urlopen')
+    @mock.patch('ide.tasks.git.now')
+    @mock.patch('ide.tasks.git.transaction.atomic')
+    def test_full_pull_stamps_sha_in_atomic_block(
+            self, mock_atomic, mock_now, mock_urlopen, mock_get_root, mock_parse, mock_validate, mock_import):
+        mock_atomic.return_value.__enter__ = mock.MagicMock()
+        mock_atomic.return_value.__exit__ = mock.MagicMock(return_value=False)
+        mock_now.return_value = '2025-01-01T00:00:00Z'
+
+        branch = mock.MagicMock()
+        branch.commit.sha = 'newsha'
+        self.repo.default_branch = 'main'
+
+        commit = mock.MagicMock()
+        commit.tree.sha = 'treesha'
+        self.repo.get_git_commit.return_value = commit
+        tree = mock.MagicMock()
+        tree.tree = []
+        self.repo.get_git_tree.return_value = tree
+
+        mock_parse.return_value = ('', {'projectType': 'native'})
+        mock_get_root.return_value = 'src/main.c'
+        mock_import.return_value = 'import_result'
+
+        result = _github_pull_full(self.user, self.project, self.repo, branch)
+
+        self.assertEqual(result, 'import_result')
+        mock_atomic.assert_called_once()
+        self.assertEqual(self.project.github_last_commit, 'newsha')
+        self.assertEqual(self.project.github_last_sync, '2025-01-01T00:00:00Z')
+        self.project.save.assert_called_once()
