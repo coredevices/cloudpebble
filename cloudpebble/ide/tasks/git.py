@@ -1,11 +1,14 @@
 import base64
+from io import BytesIO
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
 import json
 import os
 import logging
+import zipfile
 
 from celery import shared_task
+from django.db import transaction
 from django.utils.timezone import now
 from github.GithubObject import NotSet
 from github import Github, GithubException, InputGitTreeElement
@@ -356,21 +359,41 @@ def github_pull(user, project):
         if path not in paths_notags:
             raise Exception("Resource %s not found in repo." % path)
 
-    # Now we grab the zip.
+    # Fully download and validate the archive BEFORE touching the database, so
+    # an empty/truncated/corrupt stream from GitHub fails loudly without wiping.
     zip_url = repo.get_archive_link('zipball', branch_name)
-    u = urlopen(zip_url)
+    with urlopen(zip_url, timeout=30) as response:
+        archive_bytes = response.read()
+    if not archive_bytes or not zipfile.is_zipfile(BytesIO(archive_bytes)):
+        raise Exception("GitHub returned an invalid archive for branch '%s'." % branch_name)
 
-    # And wipe the project!
-    # TODO: transaction support for file contents would be nice...
-    project.source_files.all().delete()
-    project.resources.all().delete()
+    # Wipe + import in a single transaction. do_import_archive opens its own
+    # atomic block, which becomes a savepoint nested inside ours; any failure
+    # there propagates and rolls the delete back, so the project DB rows
+    # survive. Note: S3/local file blobs are deleted by a post_delete signal
+    # and are NOT covered by the transaction, so we keep the validation above
+    # (and the manifest/resource pre-checks earlier) to make a partial wipe
+    # extremely unlikely. A failure inside do_import_archive after the wipe
+    # would leave orphaned/empty blobs — an acceptable trade-off vs the
+    # previous behaviour of nuking the whole project with no recovery.
+    with transaction.atomic():
+        project.source_files.all().delete()
+        project.resources.all().delete()
 
-    # This must happen before do_import_archive or we'll stamp on its results.
-    project.github_last_commit = branch.commit.sha
-    project.github_last_sync = now()
-    project.save()
+        import_result = do_import_archive(project.id, archive_bytes)
 
-    import_result = do_import_archive(project.id, u.read())
+        # Only advance the commit pointer after a successful import. If we
+        # advanced it earlier and the import failed, the next pull would see
+        # github_last_commit == branch head and return False ("nothing to do"),
+        # leaving the user stuck with a blank project and no way to recover
+        # via the UI.
+        #
+        # update_fields so we don't clobber project fields (e.g. project_type,
+        # app_keys, dependencies) that do_import_archive just wrote via its own
+        # Project instance — our `project` here is stale.
+        project.github_last_commit = branch.commit.sha
+        project.github_last_sync = now()
+        project.save(update_fields=['github_last_commit', 'github_last_sync'])
 
     send_td_event('cloudpebble_github_pull', data={
         'data': {
