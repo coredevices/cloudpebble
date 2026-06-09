@@ -157,7 +157,7 @@ CloudPebble.Emulator = new (function() {
 
     this.init = function() {
         self.element = $('#emulator-container .configure').popover({
-            placement: 'right',
+            placement: 'bottom',
             trigger: 'click',
             content: getHTML,
             html: true,
