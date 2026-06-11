@@ -145,7 +145,7 @@ def ends_with_any(s, options):
 
 
 @shared_task(acks_late=True)
-def do_import_archive(project_id, archive, delete_project=False):
+def do_import_archive(project_id, archive, delete_project=False, wipe_existing=False):
     project = Project.objects.get(pk=project_id)
     try:
         with tempfile.NamedTemporaryFile(suffix='.zip') as archive_file:
@@ -201,6 +201,10 @@ def do_import_archive(project_id, archive, delete_project=False):
                         filtered_contents.append((filename, entry))
 
                 with transaction.atomic():
+                    if wipe_existing:
+                        project.source_files.all().delete()
+                        project.resources.all().delete()
+
                     # We have a resource map! We can now try importing things from it.
                     project_options, media_map, dependencies = load_manifest_dict(manifest_dict, manifest_kind)
 

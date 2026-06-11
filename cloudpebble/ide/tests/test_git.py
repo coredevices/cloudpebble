@@ -1351,14 +1351,14 @@ class GithubPullFullAtomicityTest(TestCase):
         self.repo = mock.MagicMock()
 
     @mock.patch('ide.tasks.git.do_import_archive')
-    @mock.patch('ide.tasks.git.validate_resources_against_tree')
-    @mock.patch('ide.tasks.git.parse_manifest_from_tree')
-    @mock.patch('ide.tasks.git.get_root_path')
+    @mock.patch('ide.tasks.git.zipfile.is_zipfile', return_value=True)
+    @mock.patch('ide.tasks.git.load_manifest_dict')
+    @mock.patch('ide.tasks.git.find_project_root_and_manifest')
     @mock.patch('ide.tasks.git.urlopen')
     @mock.patch('ide.tasks.git.now')
     @mock.patch('ide.tasks.git.transaction.atomic')
     def test_full_pull_stamps_sha_in_atomic_block(
-            self, mock_atomic, mock_now, mock_urlopen, mock_get_root, mock_parse, mock_validate, mock_import):
+            self, mock_atomic, mock_now, mock_urlopen, mock_find_manifest, mock_load_manifest, mock_is_zipfile, mock_import):
         mock_atomic.return_value.__enter__ = mock.MagicMock()
         mock_atomic.return_value.__exit__ = mock.MagicMock(return_value=False)
         mock_now.return_value = '2025-01-01T00:00:00Z'
@@ -1366,6 +1366,8 @@ class GithubPullFullAtomicityTest(TestCase):
         branch = mock.MagicMock()
         branch.commit.sha = 'newsha'
         self.repo.default_branch = 'main'
+        self.project.source_files.exists.return_value = False
+        self.project.resources.exists.return_value = False
 
         commit = mock.MagicMock()
         commit.tree.sha = 'treesha'
@@ -1373,10 +1375,20 @@ class GithubPullFullAtomicityTest(TestCase):
         tree = mock.MagicMock()
         tree.tree = []
         self.repo.get_git_tree.return_value = tree
+        self.repo.get_archive_link.return_value = 'https://example.com/zip'
 
-        mock_parse.return_value = ('', {'projectType': 'native'})
-        mock_get_root.return_value = 'src/main.c'
+        mock_manifest_item = mock.MagicMock()
+        mock_manifest_item.path = 'package.json'
+        mock_manifest_item.read.return_value = '{}'
+        mock_find_manifest.return_value = ('', mock_manifest_item)
+        mock_load_manifest.return_value = ({'project_type': 'native'}, [], [])
         mock_import.return_value = 'import_result'
+
+        mock_response = mock.MagicMock()
+        mock_response.__enter__ = mock.MagicMock(return_value=mock_response)
+        mock_response.__exit__ = mock.MagicMock(return_value=False)
+        mock_response.read.return_value = b'zip-bytes'
+        mock_urlopen.return_value = mock_response
 
         result = _github_pull_full(self.user, self.project, self.repo, branch)
 
