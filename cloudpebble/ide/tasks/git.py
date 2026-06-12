@@ -559,6 +559,12 @@ def _github_pull_delta(user, project, repo, new_commit_sha):
             project.save()
         return False
 
+    if comparison.status != 'ahead' or len(comparison.files) >= 300:
+        raise Exception(
+            "Cannot delta-sync (status=%s, changed_files=%d); "
+            "falling back to full pull." % (comparison.status, len(comparison.files))
+        )
+
     commit = repo.get_git_commit(new_commit_sha)
     tree = repo.get_git_tree(commit.tree.sha, recursive=True)
 
@@ -646,9 +652,6 @@ def _apply_delta_changes(project, repo, root, manifest, changed_files, new_commi
 def _upsert_source_file(project, repo, change, base_filename, target, existing_sources, project_path=None):
     """Create or update a SourceFile from a changed file in a GitHub comparison."""
     content = _fetch_file_content(repo, change)
-    if content is None:
-        logger.warning("Could not fetch content for %s, skipping", change.filename)
-        return
 
     if project_path is None:
         project_path = change.filename
@@ -694,9 +697,6 @@ def _upsert_resource_variant(project, repo, change, project_path, existing_resou
         existing_resources[root_file_name] = resource_file
 
     content = _fetch_file_content(repo, change)
-    if content is None:
-        logger.warning("Could not fetch content for resource %s, skipping", change.filename)
-        return
 
     variant = ResourceVariant.objects.filter(
         resource_file=resource_file, tags=tags_string).first()
@@ -802,19 +802,21 @@ def _sync_resource_files_from_manifest(project, media_map, existing_resources):
 
 
 def _fetch_file_content(repo, change):
-    """Fetch the content of a file from GitHub, handling both text and binary files."""
+    """Fetch the content of a file from GitHub using its blob SHA.
+
+    change.sha is a blob SHA, not a commit ref, so get_contents (which
+    expects branch/tag/commit refs) would 404. Use get_git_blob instead,
+    which accepts blob SHAs directly. The blob's content is base64-encoded.
+    """
     filename = change.filename
     try:
-        contents = repo.get_contents(filename, ref=change.sha if hasattr(change, 'sha') and change.sha else None)
-        if isinstance(contents, list):
-            logger.warning("Expected file but got directory at %s, skipping", filename)
-            return None
-        if contents.encoding == 'base64':
-            return base64.b64decode(contents.content)
-        return contents.decoded_content
+        blob = repo.get_git_blob(change.sha)
     except GithubException as e:
-        logger.warning("Failed to fetch %s from GitHub: %s", filename, e)
-        return None
+        raise Exception("Failed to fetch blob for %s (sha=%s): %s" % (filename, change.sha, e))
+
+    if blob.encoding == 'base64':
+        return base64.b64decode(blob.content)
+    return blob.content.encode('utf-8')
 
 
 def _infer_resource_kind_from_path(filename):
@@ -864,6 +866,8 @@ def do_github_pull(project_id, force=False):
         build = BuildResult.objects.create(project=project)
         publish_event(project_id, 'build_start', build_id=build.id)
         run_compile(build.id)
+
+    return changed
 
 
 @shared_task

@@ -2,9 +2,11 @@
 Tests in this file can be run with run_tests.py
 """
 
+import base64
 import json
 
 from django.test import TestCase
+from github import GithubException
 from unittest import mock
 import ide.git
 from ide.tasks.git import (
@@ -409,68 +411,39 @@ class FetchFileContentTest(TestCase):
         change.sha = sha
         return change
 
-    def test_returns_decoded_content_for_text_file(self):
-        repo = mock.MagicMock()
-        contents = mock.MagicMock()
-        contents.encoding = None
-        contents.decoded_content = b'hello world'
-        repo.get_contents.return_value = contents
-
-        change = self._make_change('src/main.c', sha='abc123')
-        result = _fetch_file_content(repo, change)
-        self.assertEqual(result, b'hello world')
-        repo.get_contents.assert_called_once_with('src/main.c', ref='abc123')
-
     def test_returns_base64_decoded_content(self):
         import base64
         repo = mock.MagicMock()
-        contents = mock.MagicMock()
-        contents.encoding = 'base64'
-        contents.content = base64.b64encode(b'binary data').decode('ascii')
-        repo.get_contents.return_value = contents
+        blob = mock.MagicMock()
+        blob.encoding = 'base64'
+        blob.content = base64.b64encode(b'binary data').decode('ascii')
+        repo.get_git_blob.return_value = blob
 
-        change = self._make_change('resources/images/icon.png')
+        change = self._make_change('resources/images/icon.png', sha='abc123')
         result = _fetch_file_content(repo, change)
         self.assertEqual(result, b'binary data')
+        repo.get_git_blob.assert_called_once_with('abc123')
 
-    def test_returns_none_for_directory(self):
+    def test_returns_utf8_content_for_text_blob(self):
         repo = mock.MagicMock()
-        repo.get_contents.return_value = [mock.MagicMock(), mock.MagicMock()]
-
-        change = self._make_change('src/')
-        result = _fetch_file_content(repo, change)
-        self.assertIsNone(result)
-
-    def test_returns_none_on_github_exception(self):
-        from github import GithubException
-        repo = mock.MagicMock()
-        repo.get_contents.side_effect = GithubException(404, 'Not Found', {})
-
-        change = self._make_change('src/missing.c', sha='abc')
-        result = _fetch_file_content(repo, change)
-        self.assertIsNone(result)
-
-    def test_uses_sha_ref_when_available(self):
-        repo = mock.MagicMock()
-        contents = mock.MagicMock()
-        contents.encoding = None
-        contents.decoded_content = b'data'
-        repo.get_contents.return_value = contents
+        blob = mock.MagicMock()
+        blob.encoding = 'utf-8'
+        blob.content = 'hello world'
+        repo.get_git_blob.return_value = blob
 
         change = self._make_change('src/main.c', sha='deadbeef')
-        _fetch_file_content(repo, change)
-        repo.get_contents.assert_called_once_with('src/main.c', ref='deadbeef')
+        result = _fetch_file_content(repo, change)
+        self.assertEqual(result, b'hello world')
+        repo.get_git_blob.assert_called_once_with('deadbeef')
 
-    def test_uses_no_ref_when_sha_is_none(self):
+    def test_raises_on_github_exception(self):
         repo = mock.MagicMock()
-        contents = mock.MagicMock()
-        contents.encoding = None
-        contents.decoded_content = b'data'
-        repo.get_contents.return_value = contents
+        repo.get_git_blob.side_effect = GithubException(404, 'Not Found', {})
 
-        change = self._make_change('src/main.c', sha=None)
-        _fetch_file_content(repo, change)
-        repo.get_contents.assert_called_once_with('src/main.c', ref=None)
+        change = self._make_change('src/missing.c', sha='abc')
+        with self.assertRaises(Exception) as ctx:
+            _fetch_file_content(repo, change)
+        self.assertIn('Failed to fetch blob', str(ctx.exception))
 
 
 class RemoveFileByPathTest(TestCase):
@@ -679,6 +652,7 @@ class GithubPullDeltaTest(TestCase):
         mock_now.return_value = '2025-01-01T00:00:00Z'
         comparison = mock.MagicMock()
         comparison.ahead_by = 3
+        comparison.status = 'ahead'
         comparison.files = [mock.MagicMock(filename='src/main.c', status='modified')]
         self.repo.compare.return_value = comparison
 
@@ -716,6 +690,60 @@ class GithubPullDeltaTest(TestCase):
         result = _github_pull_delta(self.user, self.project, self.repo, 'newsha')
         self.assertFalse(result)
         self.assertEqual(self.project.github_last_commit, 'newsha')
+
+    def test_delta_pull_falls_back_on_behind_status(self):
+        comparison = mock.MagicMock()
+        comparison.ahead_by = 1
+        comparison.status = 'behind'
+        self.repo.compare.return_value = comparison
+
+        with self.assertRaises(Exception) as ctx:
+            _github_pull_delta(self.user, self.project, self.repo, 'newsha')
+        self.assertIn('falling back to full pull', str(ctx.exception))
+
+    def test_delta_pull_falls_back_on_diverged_status(self):
+        comparison = mock.MagicMock()
+        comparison.ahead_by = 1
+        comparison.status = 'diverged'
+        self.repo.compare.return_value = comparison
+
+        with self.assertRaises(Exception) as ctx:
+            _github_pull_delta(self.user, self.project, self.repo, 'newsha')
+        self.assertIn('falling back to full pull', str(ctx.exception))
+
+    def test_delta_pull_falls_back_on_300_plus_files(self):
+        comparison = mock.MagicMock()
+        comparison.ahead_by = 1
+        comparison.status = 'ahead'
+        comparison.files = [mock.MagicMock() for _ in range(300)]
+        self.repo.compare.return_value = comparison
+
+        with self.assertRaises(Exception) as ctx:
+            _github_pull_delta(self.user, self.project, self.repo, 'newsha')
+        self.assertIn('falling back to full pull', str(ctx.exception))
+
+    @mock.patch('ide.tasks.git._apply_delta_changes')
+    @mock.patch('ide.tasks.git.validate_resources_against_tree')
+    @mock.patch('ide.tasks.git.parse_manifest_from_tree')
+    @mock.patch('ide.tasks.git.get_root_path')
+    def test_delta_pull_proceeds_with_299_files(self, mock_get_root, mock_parse, mock_validate, mock_apply):
+        comparison = mock.MagicMock()
+        comparison.ahead_by = 1
+        comparison.status = 'ahead'
+        comparison.files = [mock.MagicMock() for _ in range(299)]
+        self.repo.compare.return_value = comparison
+
+        mock_commit = mock.MagicMock()
+        mock_commit.tree.sha = 'treesha'
+        self.repo.get_git_commit.return_value = mock_commit
+        mock_tree = mock.MagicMock()
+        mock_tree.tree = []
+        self.repo.get_git_tree.return_value = mock_tree
+        mock_parse.return_value = ('', {'projectType': 'native'})
+        mock_get_root.return_value = 'src/main.c'
+
+        result = _github_pull_delta(self.user, self.project, self.repo, 'newsha')
+        self.assertTrue(result)
 
 
 class ApplyDeltaChangesTest(TestCase):
@@ -906,10 +934,10 @@ class UpsertSourceFileTest(TestCase):
         mock_source = mock.MagicMock()
         mock_source.is_editable_text = True
 
-        contents = mock.MagicMock()
-        contents.encoding = None
-        contents.decoded_content = b'// hello'
-        repo.get_contents.return_value = contents
+        blob = mock.MagicMock()
+        blob.encoding = 'utf-8'
+        blob.content = '// hello'
+        repo.get_git_blob.return_value = blob
 
         with mock.patch('ide.tasks.git.SourceFile') as MockSF:
             MockSF.objects.create.return_value = mock_source
@@ -930,29 +958,28 @@ class UpsertSourceFileTest(TestCase):
         change.filename = 'src/main.c'
         change.sha = 'def456'
 
-        contents = mock.MagicMock()
-        contents.encoding = None
-        contents.decoded_content = b'// updated'
-        repo.get_contents.return_value = contents
+        blob = mock.MagicMock()
+        blob.encoding = 'utf-8'
+        blob.content = '// updated'
+        repo.get_git_blob.return_value = blob
 
         _upsert_source_file(project, repo, change, 'main.c', 'app', existing_sources)
 
         existing_source.save_text.assert_called_once_with('// updated')
 
-    @mock.patch('ide.tasks.git._fetch_file_content')
-    def test_skips_when_content_is_none(self, mock_fetch):
+    def test_raises_when_fetch_fails(self):
         project = mock.MagicMock()
         repo = mock.MagicMock()
         existing_sources = {}
 
         change = mock.MagicMock()
         change.filename = 'src/main.c'
+        change.sha = 'abc123'
 
-        mock_fetch.return_value = None
+        repo.get_git_blob.side_effect = GithubException(404, 'Not Found', {})
 
-        with mock.patch('ide.tasks.git.SourceFile') as MockSF:
+        with self.assertRaises(Exception):
             _upsert_source_file(project, repo, change, 'main.c', 'app', existing_sources)
-            MockSF.objects.create.assert_not_called()
 
 
 class UpsertResourceVariantTest(TestCase):
@@ -968,10 +995,10 @@ class UpsertResourceVariantTest(TestCase):
         existing_resources = {}
         tag_map = {}
 
-        contents = mock.MagicMock()
-        contents.encoding = None
-        contents.decoded_content = b'\x89PNG'
-        repo.get_contents.return_value = contents
+        blob = mock.MagicMock()
+        blob.encoding = 'base64'
+        blob.content = base64.b64encode(b'\x89PNG').decode('ascii')
+        repo.get_git_blob.return_value = blob
 
         mock_resource = mock.MagicMock()
         mock_variant = mock.MagicMock()
@@ -1001,10 +1028,10 @@ class UpsertResourceVariantTest(TestCase):
         existing_resources = {'images/icon.png': existing_resource}
         tag_map = {}
 
-        contents = mock.MagicMock()
-        contents.encoding = None
-        contents.decoded_content = b'\x89PNG'
-        repo.get_contents.return_value = contents
+        blob = mock.MagicMock()
+        blob.encoding = 'base64'
+        blob.content = base64.b64encode(b'\x89PNG').decode('ascii')
+        repo.get_git_blob.return_value = blob
 
         mock_variant = mock.MagicMock()
 
@@ -1117,10 +1144,10 @@ class UpsertResourceVariantKindOverrideTest(TestCase):
         tag_map = {}
         media_map = [{'file': 'images/icon.png', 'name': 'ICON', 'type': 'bitmap'}]
 
-        contents = mock.MagicMock()
-        contents.encoding = None
-        contents.decoded_content = b'\x89PNG'
-        repo.get_contents.return_value = contents
+        blob = mock.MagicMock()
+        blob.encoding = 'base64'
+        blob.content = base64.b64encode(b'\x89PNG').decode('ascii')
+        repo.get_git_blob.return_value = blob
 
         mock_resource = mock.MagicMock()
         mock_variant = mock.MagicMock()
@@ -1149,10 +1176,10 @@ class UpsertResourceVariantKindOverrideTest(TestCase):
         existing_resources = {}
         tag_map = {}
 
-        contents = mock.MagicMock()
-        contents.encoding = None
-        contents.decoded_content = b'\x89PNG'
-        repo.get_contents.return_value = contents
+        blob = mock.MagicMock()
+        blob.encoding = 'base64'
+        blob.content = base64.b64encode(b'\x89PNG').decode('ascii')
+        repo.get_git_blob.return_value = blob
 
         mock_resource = mock.MagicMock()
         mock_variant = mock.MagicMock()
@@ -1236,6 +1263,7 @@ class GithubPullDeltaAtomicityTest(TestCase):
         mock_now.return_value = '2025-01-01T00:00:00Z'
         comparison = mock.MagicMock()
         comparison.ahead_by = 3
+        comparison.status = 'ahead'
         comparison.files = [mock.MagicMock(filename='src/main.c', status='modified')]
         self.repo.compare.return_value = comparison
 
