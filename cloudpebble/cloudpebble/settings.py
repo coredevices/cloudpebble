@@ -53,6 +53,11 @@ else:
     DATABASES = {
         'default': dj_database_url.config()
     }
+    # Required when DATABASE_URL points at a transaction-mode pooler (e.g.
+    # Supabase/Supavisor on port 6543): named server-side cursors can't span a
+    # per-transaction connection checkout, so disable them. Harmless on direct
+    # connections, where it just keeps .iterator() results client-side.
+    DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
 
 PROJECT_PATH = os.path.dirname(os.path.abspath(__file__)) + '/../'
 
