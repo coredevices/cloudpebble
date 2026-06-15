@@ -58,6 +58,12 @@ else:
     # per-transaction connection checkout, so disable them. Harmless on direct
     # connections, where it just keeps .iterator() results client-side.
     DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
+    # psycopg2 in async/green mode (psycogreen + gevent, see gunicorn.py) can't
+    # issue `SHOW client_encoding` during connect, so it relies on the server's
+    # ParameterStatus message — which Supavisor in transaction mode doesn't
+    # reliably send, raising "server didn't return client encoding". Pin it
+    # explicitly so psycopg2 never has to read it back.
+    DATABASES['default'].setdefault('OPTIONS', {})['client_encoding'] = 'UTF8'
 
 PROJECT_PATH = os.path.dirname(os.path.abspath(__file__)) + '/../'
 
