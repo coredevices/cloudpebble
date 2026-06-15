@@ -947,6 +947,20 @@ var show_clear_logs_prompt = function() {
             var opts = options || {};
             var kind = opts.kind || CloudPebble.Compile.GetPlatformForInstall();
             return install_on_watch(kind, opts.build);
+        },
+        OnBuildStart: function(buildId) {
+            mRunningBuild = true;
+            if (pane) {
+                var tempBuild = {started: (new Date()).toISOString(), finished: null, state: 1, uuid: null, id: buildId, size: {total: null, binary: null, resources: null}};
+                update_last_build(pane, tempBuild);
+                pane.find('#run-build-table').prepend(build_history_row(tempBuild));
+            }
+        },
+        OnBuildComplete: function(buildId, state) {
+            mRunningBuild = false;
+            if (pane) {
+                update_build_history(pane);
+            }
         }
     };
 })();

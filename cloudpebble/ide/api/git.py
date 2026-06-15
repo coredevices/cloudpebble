@@ -15,6 +15,19 @@ from utils.jsonview import json_view, BadRequest
 __author__ = 'katharine'
 
 
+def _parse_bool(value, default=False):
+    if value in (True, False):
+        return value
+    if isinstance(value, int):
+        return bool(value)
+    if isinstance(value, str):
+        if value in ('1', 'true', 'True'):
+            return True
+        if value in ('0', 'false', 'False', ''):
+            return False
+    return default
+
+
 @login_required
 @require_POST
 @json_view
@@ -30,7 +43,8 @@ def github_push(request, project_id):
 @json_view
 def github_pull(request, project_id):
     project = get_object_or_404(Project, pk=project_id, owner=request.user)
-    task = do_github_pull.delay(project.id)
+    force = _parse_bool(request.POST.get('force', '0'))
+    task = do_github_pull.delay(project.id, force=force)
     return {'task_id': task.task_id}
 
 
@@ -41,8 +55,9 @@ def set_project_repo(request, project_id):
     project = get_object_or_404(Project, pk=project_id, owner=request.user)
     repo = request.POST['repo']
     branch = request.POST['branch']
-    auto_pull = bool(int(request.POST['auto_pull']))
-    auto_build = bool(int(request.POST['auto_build']))
+    auto_pull = _parse_bool(request.POST['auto_pull'])
+    auto_build = _parse_bool(request.POST['auto_build'])
+    hook_force = _parse_bool(request.POST.get('hook_force', '0'))
 
     repo = ide.git.url_to_repo(repo)
     if repo is None:
@@ -109,6 +124,7 @@ def set_project_repo(request, project_id):
                 project.github_hook_uuid = None
 
         project.github_hook_build = auto_build
+        project.github_hook_force = hook_force
 
         project.save()
 

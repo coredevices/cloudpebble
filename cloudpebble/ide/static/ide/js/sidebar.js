@@ -243,8 +243,30 @@ CloudPebble.Sidebar = (function() {
 
             a.find('i').removeClass().addClass('icon-' + icon);
         },
+        ShowPending: function(pane_id, text) {
+            if (this._pendingTimers && this._pendingTimers[pane_id]) {
+                clearInterval(this._pendingTimers[pane_id]);
+            }
+            this.ClearIcon(pane_id);
+            var a = $('#sidebar-pane-' + pane_id).find('a');
+            var span = $('<span class="sidebar-pending">').text(text);
+            a.append(span);
+            var dots = 1;
+            this._pendingTimers = this._pendingTimers || {};
+            this._pendingTimers[pane_id] = setInterval(function() {
+                span.text(text + '.'.repeat(dots));
+                dots = (dots % 3) + 1;
+            }, 1000);
+        },
+        HidePending: function(pane_id) {
+            if (this._pendingTimers && this._pendingTimers[pane_id]) {
+                clearInterval(this._pendingTimers[pane_id]);
+                delete this._pendingTimers[pane_id];
+            }
+            this.ClearIcon(pane_id);
+        },
         ClearIcon: function(pane_id) {
-            $('#sidebar-pane-' + pane_id).find('a > i').remove();
+            $('#sidebar-pane-' + pane_id).find('a > i, a > .sidebar-pending').remove();
         },
         Init: function() {
             $('#sidebar-pane-new-resource').click(CloudPebble.Resources.Create);
@@ -293,6 +315,40 @@ CloudPebble.Sidebar = (function() {
             if(type != 'alloy') {
                 $('.alloy-only').hide();
             }
+        },
+        Refresh: function() {
+            var saved_GetUnsavedFiles = CloudPebble.Editor.GetUnsavedFiles;
+            CloudPebble.Editor.GetUnsavedFiles = function() { return 0; };
+            $('#sidebar-sources').empty();
+            $('#sidebar-resources').empty();
+            create_initial_sections(CloudPebble.ProjectInfo.type);
+            Ajax.Get('/ide/project/' + PROJECT_ID + '/info').done(function(data) {
+                try {
+                    CloudPebble.ProjectInfo = data;
+                    var is_alloy = data.type === 'alloy';
+                    $.each(data.source_files, function(index, value) {
+                        if (is_alloy && value.target === 'embeddedjs' && value.is_binary) {
+                            if (CloudPebble.Resources && _.isFunction(CloudPebble.Resources.AddAlloyAsset)) {
+                                CloudPebble.Resources.AddAlloyAsset(value);
+                            }
+                            return;
+                        }
+                        CloudPebble.Editor.Add(value);
+                    });
+                    $.each(data.resources, function(index, value) {
+                        CloudPebble.Resources.Add(value);
+                    });
+                } finally {
+                    CloudPebble.Editor.GetUnsavedFiles = saved_GetUnsavedFiles;
+                }
+                // Re-load the buffer for the currently-open file, if any, so
+                // the user isn't staring at stale content after a pull.
+                if (typeof CloudPebble.Editor.ReloadActive === 'function') {
+                    CloudPebble.Editor.ReloadActive();
+                }
+            }).fail(function() {
+                CloudPebble.Editor.GetUnsavedFiles = saved_GetUnsavedFiles;
+            });
         }
     };
 })();

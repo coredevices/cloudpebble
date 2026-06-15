@@ -454,8 +454,9 @@ def project_info(request, project_id):
             'branch': project.github_branch if project.github_branch is not None else None,
             'last_sync': str(project.github_last_sync) if project.github_last_sync is not None else None,
             'last_commit': project.github_last_commit,
-            'auto_build': project.github_hook_build,
-            'auto_pull': project.github_hook_uuid is not None
+             'auto_build': project.github_hook_build,
+            'auto_pull': project.github_hook_uuid is not None,
+            'hook_force': project.github_hook_force
         },
         'supported_platforms': project.supported_platforms,
         'has_embeddedjs': project.has_embeddedjs_files,

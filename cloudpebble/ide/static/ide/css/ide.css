@@ -1617,3 +1617,13 @@ label .text-icon {
 .spinner-light {
     background-image: url("/static/ide/img/spinner.gif");
 }
+
+.sidebar-pending {
+    display: inline-block;
+    font-size: 11px;
+    color: #ff4700;
+    margin-left: 6px;
+    font-family: sans-serif;
+    font-weight: bold;
+    vertical-align: middle;
+}

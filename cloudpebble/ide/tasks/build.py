@@ -16,6 +16,7 @@ from ide.models.dependency import validate_dependency_version
 from ide.utils.crypto import decrypt_value
 from ide.utils.sdk.project_assembly import assemble_project
 from utils.td_helper import send_td_event
+from utils.events import publish_event
 
 __author__ = 'katharine'
 
@@ -179,6 +180,9 @@ def run_compile(build_result):
             build_result.state = BuildResult.STATE_SUCCEEDED if success else BuildResult.STATE_FAILED
             build_result.finished = now()
             build_result.save()
+            publish_event(build_result.project_id, 'build_complete',
+                          build_id=build_result.id,
+                          state='succeeded' if success else 'failed')
 
             data = {
                 'data': {
@@ -203,5 +207,7 @@ def run_compile(build_result):
         except:
             pass
         build_result.save()
+        publish_event(build_result.project_id, 'build_complete',
+                      build_id=build_result.id, state='failed')
     finally:
         shutil.rmtree(base_dir)
