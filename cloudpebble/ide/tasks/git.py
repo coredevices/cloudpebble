@@ -600,6 +600,25 @@ def _apply_delta_changes(project, repo, root, manifest, changed_files, new_commi
     manifest_kind = 'package.json' if 'pebble' in manifest else 'appinfo.json'
     resource_root = ((root + '/' if root else '') + project.resources_path).rstrip('/') + '/'
 
+    # Fetch all blob contents from GitHub up front, OUTSIDE the transaction.
+    # Each fetch is a network round-trip; doing them inside transaction.atomic()
+    # holds a DB connection (and a pooler client slot) open for the whole
+    # sequence and exhausts the pool under concurrency. Mirror the apply-loop
+    # routing below so we only fetch files we'll actually store (skipping
+    # unrecognized source paths / submodules, which would 404), and key by blob
+    # SHA so identical content is fetched once.
+    content_by_sha = {}
+    for change in changed_files:
+        if change.status not in ('added', 'modified', 'renamed') or change.sha in content_by_sha:
+            continue
+        project_path = change.filename[len(root) + 1:] if root and change.filename.startswith(root + '/') else change.filename
+        if not project_path.startswith(project.resources_path + '/'):
+            try:
+                SourceFile.get_details_for_path(project.project_type, project_path)
+            except ValueError:
+                continue
+        content_by_sha[change.sha] = _fetch_file_content(repo, change)
+
     with transaction.atomic():
         project_options, media_map, dependencies = load_manifest_dict(manifest, manifest_kind)
 
@@ -628,11 +647,11 @@ def _apply_delta_changes(project, repo, root, manifest, changed_files, new_commi
                     _remove_file_by_path(project, prev_project_path, existing_sources, existing_resources)
 
                 if project_path.startswith(project.resources_path + '/'):
-                    _upsert_resource_variant(project, repo, change, project_path, existing_resources, tag_map, media_map)
+                    _upsert_resource_variant(project, repo, change, project_path, existing_resources, tag_map, media_map, content_map=content_by_sha)
                 else:
                     try:
                         base_filename, target = SourceFile.get_details_for_path(project.project_type, project_path)
-                        _upsert_source_file(project, repo, change, base_filename, target, existing_sources, project_path)
+                        _upsert_source_file(project, repo, change, base_filename, target, existing_sources, project_path, content_map=content_by_sha)
                     except ValueError:
                         logger.debug("Skipping unrecognized file in delta: %s", filename)
                         continue
@@ -649,9 +668,9 @@ def _apply_delta_changes(project, repo, root, manifest, changed_files, new_commi
         project.save()
 
 
-def _upsert_source_file(project, repo, change, base_filename, target, existing_sources, project_path=None):
+def _upsert_source_file(project, repo, change, base_filename, target, existing_sources, project_path=None, content_map=None):
     """Create or update a SourceFile from a changed file in a GitHub comparison."""
-    content = _fetch_file_content(repo, change)
+    content = _resolve_content(repo, change, content_map)
 
     if project_path is None:
         project_path = change.filename
@@ -667,7 +686,7 @@ def _upsert_source_file(project, repo, change, base_filename, target, existing_s
         source.save_string(content)
 
 
-def _upsert_resource_variant(project, repo, change, project_path, existing_resources, tag_map, media_map=None):
+def _upsert_resource_variant(project, repo, change, project_path, existing_resources, tag_map, media_map=None, content_map=None):
     """Create or update a ResourceVariant from a changed resource file in a GitHub comparison."""
     resource_root = project.resources_path + '/'
     base_filename = project_path[len(resource_root):]
@@ -696,7 +715,7 @@ def _upsert_resource_variant(project, repo, change, project_path, existing_resou
             project=project, file_name=file_name, kind=kind)
         existing_resources[root_file_name] = resource_file
 
-    content = _fetch_file_content(repo, change)
+    content = _resolve_content(repo, change, content_map)
 
     variant = ResourceVariant.objects.filter(
         resource_file=resource_file, tags=tags_string).first()
@@ -799,6 +818,19 @@ def _sync_resource_files_from_manifest(project, media_map, existing_resources):
         if file_name not in desired_file_names:
             existing_resources[file_name].delete()
             del existing_resources[file_name]
+
+
+def _resolve_content(repo, change, content_map):
+    """Return the content for a changed file, preferring a pre-fetched blob.
+
+    _apply_delta_changes pre-fetches every blob OUTSIDE the transaction and
+    passes them in via content_map (keyed by blob SHA) so no GitHub round-trip
+    happens while a DB connection is held. Callers without a map — e.g. unit
+    tests calling the upsert helpers directly — fall back to fetching on demand.
+    """
+    if content_map is not None and change.sha in content_map:
+        return content_map[change.sha]
+    return _fetch_file_content(repo, change)
 
 
 def _fetch_file_content(repo, change):
