@@ -17,6 +17,14 @@ class SSEEventStream:
         self.pubsub.subscribe(self.channel)
 
     def __iter__(self):
+        # This greenlet is still holding the DB connection opened during auth /
+        # session load, but the stream below talks only to Redis. A
+        # StreamingHttpResponse doesn't fire request_finished (which releases
+        # the connection) until the client disconnects — for an idle IDE tab
+        # that can be hours. Release it now so long-lived SSE streams don't each
+        # pin a pooler client connection and exhaust the pool (EMAXCONN).
+        from django.db import connection
+        connection.close()
         try:
             for message in self.pubsub.listen():
                 if message['type'] == 'message':
