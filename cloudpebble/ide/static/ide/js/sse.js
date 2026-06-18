@@ -2,6 +2,8 @@ CloudPebble.Events = (function() {
     var source = null;
     var reconnectTimer = null;
     var RECONNECT_DELAY = 3000;
+    var MAX_RECONNECT_DELAY = 60000;
+    var reconnectDelay = RECONNECT_DELAY;
 
     var handlers = {
         handlePullStart: function() {
@@ -35,6 +37,12 @@ CloudPebble.Events = (function() {
 
         source = new EventSource('/ide/project/' + PROJECT_ID + '/events');
 
+        // A successful connection resets the backoff so genuine transient
+        // blips recover quickly.
+        source.onopen = function() {
+            reconnectDelay = RECONNECT_DELAY;
+        };
+
         source.addEventListener('pull_start', handlers.handlePullStart);
         source.addEventListener('pull_complete', handlers.handlePullComplete);
         source.addEventListener('pull_failed', handlers.handlePullFailed);
@@ -44,7 +52,12 @@ CloudPebble.Events = (function() {
         source.onerror = function() {
             if (source.readyState === EventSource.CLOSED) {
                 if (reconnectTimer) clearTimeout(reconnectTimer);
-                reconnectTimer = setTimeout(connect, RECONNECT_DELAY);
+                // Exponential backoff (capped). A permanently-failing endpoint
+                // — e.g. a tab left open on a deleted project — backs off to one
+                // retry per minute instead of hammering every 3s, while a real
+                // outage still self-heals once onopen resets the delay.
+                reconnectTimer = setTimeout(connect, reconnectDelay);
+                reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
             }
         };
     };
@@ -57,6 +70,7 @@ CloudPebble.Events = (function() {
             if (reconnectTimer) clearTimeout(reconnectTimer);
             if (source) source.close();
             source = null;
+            reconnectDelay = RECONNECT_DELAY;
         },
         handlePullStart: handlers.handlePullStart,
         handlePullComplete: handlers.handlePullComplete,
