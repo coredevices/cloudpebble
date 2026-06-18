@@ -9,6 +9,11 @@ from utils.redis_helper import redis_client
 
 logger = logging.getLogger(__name__)
 
+# How long to block waiting for a Redis message before emitting an SSE keepalive
+# comment. The keepalive is what lets us detect vanished clients (see __iter__),
+# so this also bounds how long a leaked stream can linger.
+HEARTBEAT_SECONDS = 15
+
 
 class SSEEventStream:
     def __init__(self, project_id):
@@ -26,7 +31,24 @@ class SSEEventStream:
         from django.db import connection
         connection.close()
         try:
-            for message in self.pubsub.listen():
+            while True:
+                # Block for at most HEARTBEAT_SECONDS rather than forever.
+                # pubsub.listen() never returns while a channel is idle, so a
+                # client that closes its tab without us ever publishing an event
+                # would leave this greenlet (and its Redis pubsub connection)
+                # blocked indefinitely — that leak exhausts greenlets / Redis
+                # clients and is what surfaces as gateway (502/504) errors.
+                # On timeout we yield a keepalive comment; the write forces
+                # gunicorn to notice a disconnected client and raise
+                # GeneratorExit here, so the finally block can release the
+                # connection.
+                message = self.pubsub.get_message(
+                    ignore_subscribe_messages=True,
+                    timeout=HEARTBEAT_SECONDS,
+                )
+                if message is None:
+                    yield ': keepalive\n\n'
+                    continue
                 if message['type'] == 'message':
                     data = message['data']
                     if isinstance(data, bytes):
