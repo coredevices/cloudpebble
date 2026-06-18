@@ -15,13 +15,24 @@ class FakePubSub:
     def __init__(self):
         self.messages = []
         self.subscribed = False
+        self._index = 0
 
     def subscribe(self, channel):
         self.subscribed = True
 
-    def listen(self):
-        for msg in self.messages:
-            yield msg
+    def get_message(self, ignore_subscribe_messages=False, timeout=None):
+        # Hand back queued messages one at a time, mirroring redis-py. Once
+        # they're exhausted we return None to model a timeout with no traffic,
+        # which is what drives the keepalive branch in SSEEventStream.__iter__.
+        while self._index < len(self.messages):
+            msg = self.messages[self._index]
+            self._index += 1
+            if ignore_subscribe_messages and msg.get('type') in (
+                'subscribe', 'unsubscribe', 'psubscribe', 'punsubscribe'
+            ):
+                continue
+            return msg
+        return None
 
     def unsubscribe(self, channel):
         self.subscribed = False
@@ -77,6 +88,17 @@ class TestPublishEvent(TestCase):
 
 
 class TestSSEEventStream(TestCase):
+    def _drain(self, stream):
+        # The stream now loops forever, emitting a ': keepalive' comment once the
+        # fake pubsub runs dry. Collect real event payloads up to that first
+        # keepalive so tests don't hang.
+        results = []
+        for item in stream:
+            if item.startswith(':'):
+                break
+            results.append(item)
+        return results
+
     def test_stream_yields_formatted_messages(self):
         stream = SSEEventStream.__new__(SSEEventStream)
         stream.channel = 'project_events:1'
@@ -86,9 +108,7 @@ class TestSSEEventStream(TestCase):
             {'type': 'message', 'data': b'{"type":"pull_start"}'},
             {'type': 'message', 'data': b'{"type":"pull_complete","github_last_commit":"abc123","github_last_sync":"2025-01-01"}'},
         ]
-        results = []
-        for item in stream:
-            results.append(item)
+        results = self._drain(stream)
         self.assertEqual(len(results), 2)
         self.assertEqual(results[0], 'event: pull_start\ndata: {}\n\n')
         self.assertEqual(results[1], 'event: pull_complete\ndata: {"github_last_commit": "abc123", "github_last_sync": "2025-01-01"}\n\n')
@@ -101,9 +121,7 @@ class TestSSEEventStream(TestCase):
             {'type': 'subscribe', 'data': b''},
             {'type': 'message', 'data': b'{"type":"build_start","build_id":1}'},
         ]
-        results = []
-        for item in stream:
-            results.append(item)
+        results = self._drain(stream)
         self.assertEqual(len(results), 1)
         self.assertIn('event:', results[0])
         self.assertIn('build_start', results[0])
@@ -115,7 +133,7 @@ class TestSSEEventStream(TestCase):
         stream.pubsub.messages = [
             {'type': 'message', 'data': b'{"type":"pull_start"}'},
         ]
-        results = list(stream)
+        results = self._drain(stream)
         self.assertEqual(results[0], 'event: pull_start\ndata: {}\n\n')
 
     def test_stream_handles_string_data(self):
@@ -125,7 +143,7 @@ class TestSSEEventStream(TestCase):
         stream.pubsub.messages = [
             {'type': 'message', 'data': '{"type":"pull_start"}'},
         ]
-        results = list(stream)
+        results = self._drain(stream)
         self.assertEqual(results[0], 'event: pull_start\ndata: {}\n\n')
 
     def test_stream_cleans_up_on_generator_exit(self):
