@@ -150,8 +150,8 @@ class Emulator(object):
             return
         self.audio_sink = sink_name
         self.audio_module_id = int(m.group(1))
-        # Per-emulator pulse client.conf as belt-and-suspenders for routing —
-        # libpulse uses default-sink from this when QEMU passes dev=NULL.
+        # Belt-and-suspenders: QEMU is pinned to this sink via out.name=,
+        # this covers anything else in the process tree that isn't.
         self.audio_client_conf = '/tmp/pulse-' + sink_name + '.conf'
         try:
             with open(self.audio_client_conf, 'w') as f:
@@ -159,15 +159,6 @@ class Emulator(object):
         except OSError:
             logging.exception('audio: failed to write %s', self.audio_client_conf)
             self.audio_client_conf = None
-        # Make our sink the server-side default. QEMU's libpulse passes
-        # dev=NULL to pa_simple_new, so the server routes to its current
-        # default. Concurrent launches race here — last writer wins — but
-        # previously-attached streams stay bound to their original sink,
-        # so existing emulators keep their routing intact.
-        try:
-            subprocess.call(['pactl', 'set-default-sink', sink_name], timeout=5)
-        except (OSError, subprocess.TimeoutExpired):
-            logging.exception('audio: failed to set default sink %s', sink_name)
         logging.info('audio: created null-sink %s module=%s', sink_name, self.audio_module_id)
 
     def _unload_audio_sink(self):
@@ -221,9 +212,10 @@ class Emulator(object):
         mtd_args = ['-mtdblock', spi_flash]
         mtd_drive = ['-drive', 'if=mtd,format=raw,file=%s' % spi_flash]
         if self.platform in AUDIO_PLATFORMS and self.audio_sink:
+            # out.name pins the stream to this sink instead of the shared server default.
             audio_args = [
                 '-audiodev',
-                'pa,id=audio0,server=unix:/run/cloudpebble-pipewire/pulse/native',
+                'pa,id=audio0,server=unix:/run/cloudpebble-pipewire/pulse/native,out.name=%s' % self.audio_sink,
                 '-machine', 'audiodev=audio0',
             ]
         else:
