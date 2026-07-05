@@ -77,7 +77,7 @@
                 mAudioGain.connect(mAudioCtx.destination);
 
                 var wsURL = (mSecure ? 'wss' : 'ws') + '://' + mHost + ':' + mAPIPort
-                          + '/qemu/' + mInstanceID + '/ws/audio';
+                          + '/qemu/' + mInstanceID + '/ws/audio?token=' + encodeURIComponent(mToken);
                 mAudioWS = new WebSocket(wsURL);
                 mAudioWS.binaryType = 'arraybuffer';
 

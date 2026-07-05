@@ -8,6 +8,7 @@ import gevent.pool
 from flask import Flask, request, jsonify, abort
 from flask_cors import CORS
 from time import time as now
+import hmac
 import ssl
 import os
 import pwd
@@ -185,6 +186,12 @@ def ws_audio(emu):
         emulator = emulators[UUID(emu)]
     except (ValueError, KeyError):
         return "not found", 404
+    # Unlike VNC/phone, this endpoint had no credential check.
+    token = request.args.get('token', '')
+    if not token or not hmac.compare_digest(token.encode('utf-8'),
+                                            (emulator.token or '').encode('utf-8')):
+        logging.warning("ws_audio: bad token for emu=%s", emu)
+        return "forbidden", 403
     if emulator.platform not in ('emery', 'flint') or not emulator.audio_sink:
         return "no audio for this platform", 400
 
