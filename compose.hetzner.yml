@@ -1,0 +1,40 @@
+name: cloudpebble
+
+# Production compose file for the Hetzner emulator box (qemu.repebble.com).
+# Runs ONLY the stateless satellite services: qemu (emulator controller),
+# ycmd (code completion proxy), and nginx (routing + ci.repebble.com).
+# The full CloudPebble app (web, celery, postgres, redis, s3) lives elsewhere
+# and talks to this box via /qemu/launch and /ycmd/spinup.
+# Local development uses docker-compose.yml, not this file.
+
+services:
+  nginx:
+    image: ${NGINX_IMAGE:-nginx:alpine}
+    restart: unless-stopped
+    ports:
+      # Production origin port — Cloudflare connects on 80.
+      - "${NGINX_PORT:-80}:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./nginx/nginx.hetzner.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - qemu
+      - ycmd
+
+  qemu:
+    build:
+      context: cloudpebble-qemu-controller/
+      args:
+        PEBBLE_SDK_VERSION: ${PEBBLE_SDK_VERSION}
+    restart: unless-stopped
+    environment:
+      - EMULATOR_FIXED_LIMIT=${EMULATOR_FIXED_LIMIT:-90}
+
+  ycmd:
+    build:
+      context: cloudpebble-ycmd-proxy/
+      args:
+        PEBBLE_SDK_VERSION: ${PEBBLE_SDK_VERSION}
+        NODE_VERSION: ${NODE_VERSION_YCMD:-16.20.2}
+    restart: unless-stopped

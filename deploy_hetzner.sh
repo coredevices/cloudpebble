@@ -2,6 +2,8 @@
 set -euo pipefail
 
 # Deploy qemu + ycmd + nginx to Hetzner (production emulator + code completion)
+# Uses compose.hetzner.yml — the slim stack. The full docker-compose.yml is
+# for local development only and does not run on this box.
 # Config is read from .env (QEMU_SERVER, QEMU_SSH_KEY)
 # Usage: ./deploy_hetzner.sh [--no-cache]
 
@@ -33,17 +35,21 @@ rsync -avz --delete \
   -e "ssh -i $QEMU_SSH_KEY" \
   "$SCRIPT_DIR/" "$QEMU_SERVER":~/cloudpebble/
 
+DC="docker compose -f compose.hetzner.yml"
+
 echo "==> Building images..."
-$SSH "cd ~/cloudpebble && docker compose --profile emulator --profile codecomplete build $NO_CACHE"
+$SSH "cd ~/cloudpebble && $DC build $NO_CACHE"
 
 echo "==> Restarting services..."
-$SSH "cd ~/cloudpebble && docker compose --profile emulator --profile codecomplete down && docker compose --profile emulator --profile codecomplete up -d"
+# --remove-orphans also removes containers from the old full-stack deploy
+# (web, celery, postgres, redis, s3). Volumes are left untouched.
+$SSH "cd ~/cloudpebble && $DC down --remove-orphans && $DC up -d"
 
 echo "==> Waiting for services to start..."
 sleep 3
 
 echo "==> Container status:"
-$SSH "cd ~/cloudpebble && docker compose --profile emulator --profile codecomplete ps"
+$SSH "cd ~/cloudpebble && $DC ps"
 
 echo ""
 echo "==> Deploy complete."
