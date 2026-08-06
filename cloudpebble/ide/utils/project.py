@@ -49,9 +49,26 @@ def is_manifest(kind, contents):
         return False
 
 
-def find_project_root_and_manifest(project_items):
+def _dir_matches_hint(base_dir, root_hint):
+    """ True if base_dir ('' or 'a/b/') is the root_hint directory, allowing
+    at most ONE wrapping folder above it ('<repo>-<ref>/...' in GitHub zips).
+    The wrapper limit matters: a bare suffix match would let a hint like
+    'src' latch onto any directory of that name at any depth. """
+    stripped = base_dir.rstrip('/')
+    if stripped == root_hint:
+        return True
+    suffix = '/' + root_hint
+    return stripped.endswith(suffix) and '/' not in stripped[:-len(suffix)]
+
+
+def find_project_root_and_manifest(project_items, root_hint=None):
     """ Given the contents of an archive, find a valid Pebble project.
     :param project_items: A list of BaseProjectItems
+    :param root_hint: If given, only accept a project whose directory is
+        root_hint, relative to the archive's own root (archives from GitHub
+        wrap everything in a '<repo>-<ref>/' folder, so the hint is matched
+        against the tail of the directory). Used by /tree/<ref>/<subdir>
+        imports to pick one project out of a repository that contains several.
     :return: A tuple of (path_to_project, manifest BaseProjectItem)
     """
     SRC_DIR = 'src/'
@@ -84,6 +101,11 @@ def find_project_root_and_manifest(project_items):
         # The base dir is the location of the manifest file without the manifest filename.
         base_dir = base_dir[:dir_end]
 
+        # A root hint pins the project to one directory; manifests anywhere
+        # else (e.g. the repository root) don't count.
+        if root_hint and not _dir_matches_hint(base_dir, root_hint):
+            continue
+
         # If we found a valid package.json, just return.
         if name == PACKAGE_MANIFEST:
             return base_dir, manifest_item
@@ -105,6 +127,9 @@ def find_project_root_and_manifest(project_items):
         return base_dir, manifest_item
 
     # If we didn't find a valid project but we did find a broken manifest file, complain about it specifically.
+    if root_hint:
+        raise InvalidProjectArchiveException(
+            _("No valid Pebble project found at '%s' in this repository." % root_hint))
     if invalid_package_path:
         raise InvalidProjectArchiveException(_("The file %s does not contain a valid JSON object." % invalid_package_path))
     else:

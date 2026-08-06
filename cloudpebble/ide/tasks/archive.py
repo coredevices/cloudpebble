@@ -145,7 +145,7 @@ def ends_with_any(s, options):
 
 
 @shared_task(acks_late=True)
-def do_import_archive(project_id, archive, delete_project=False, wipe_existing=False):
+def do_import_archive(project_id, archive, delete_project=False, wipe_existing=False, root_hint=None):
     project = Project.objects.get(pk=project_id)
     try:
         with tempfile.NamedTemporaryFile(suffix='.zip') as archive_file:
@@ -172,7 +172,7 @@ def do_import_archive(project_id, archive, delete_project=False, wipe_existing=F
                     raise InvalidProjectArchiveException("Too many files in zip file.")
 
                 archive_items = [ArchiveProjectItem(z, x) for x in contents]
-                base_dir, manifest_item = find_project_root_and_manifest(archive_items)
+                base_dir, manifest_item = find_project_root_and_manifest(archive_items, root_hint=root_hint)
                 dir_end = len(base_dir)
 
                 def make_valid_filename(zip_entry):
