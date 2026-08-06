@@ -76,6 +76,24 @@ class TestParseGithubSource(TestCase):
         self.assert_parsed('github.com/user/repo/tree/main/my%20dir',
                            'user', 'repo', 'tree', 'main/my dir')
 
+    def test_legacy_colon_form(self):
+        # The pre-parser server regex matched github.com[/:], so links using a
+        # bare colon after the domain must keep importing.
+        self.assert_parsed('github.com:user/repo', 'user', 'repo')
+        self.assert_parsed('https://github.com:user/repo.git', 'user', 'repo')
+
+    def test_legacy_regex_parity(self):
+        # Every form the OLD import regex accepted (it truncated at the repo
+        # name) must still parse to the same user/project pair.
+        for source in ('https://github.com/user/repo',
+                       'http://github.com/user/repo',
+                       'www.github.com/user/repo',
+                       'git@github.com:user/repo',
+                       'git://github.com/user/repo',
+                       'github.com/user/repo.git',
+                       'github.com/user/repo/'):
+            self.assert_parsed(source, 'user', 'repo')
+
     def test_rejects_non_github(self):
         for source in ('gitlab.com/user/repo', 'https://example.com/user/repo', 'user', ''):
             self.assertIsNone(parse_github_source(source), source)

@@ -26,7 +26,9 @@ GithubSource = namedtuple('GithubSource', ['user', 'project', 'kind', 'refpath']
 
 # Accepted forms (query strings and fragments are ignored):
 #   user/repo
-#   github.com/user/repo[.git][/]           (bare, http, https, www)
+#   github.com/user/repo[.git][/]           (bare, http, https, www; the
+#                                            legacy 'github.com:user/repo'
+#                                            colon form stays accepted)
 #   git@github.com:user/repo[.git]
 #   git://github.com/user/repo[.git]
 #   .../user/repo/tree/<ref>[/<path>]
@@ -37,7 +39,7 @@ GithubSource = namedtuple('GithubSource', ['user', 'project', 'kind', 'refpath']
 _SOURCE_RE = re.compile(r"""
     ^
     (?:
-        (?i:(?:https?://)?(?:www\.)?github\.com)/ |
+        (?i:(?:https?://)?(?:www\.)?github\.com)[/:] |
         (?i:git@github\.com): |
         (?i:git://github\.com)/
     )?
