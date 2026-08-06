@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
+from urllib.parse import quote
 import json
 import os
 import logging
@@ -65,7 +66,10 @@ def do_import_github(project_id, github_user, github_project, github_branch, del
             # hardcoded 'master', which broke every main-default repository.
             github_branch = 'HEAD'
 
-        url = "https://github.com/%s/%s/archive/%s.zip" % (github_user, github_project, github_branch)
+        # quote() the ref: slashes are real URL separators here, but a branch
+        # name may legally contain '#', '?' or spaces, which would otherwise
+        # truncate the request path.
+        url = "https://github.com/%s/%s/archive/%s.zip" % (github_user, github_project, quote(github_branch, safe='/'))
         auth_url = get_authenticated_archive_url(user, github_user, github_project, github_branch)
         archive = None
 
@@ -111,6 +115,15 @@ def resolve_ref_and_path(user, github_user, github_project, refpath, kind):
     if kind == 'commit':
         return refpath, ''
 
+    # A self-qualified refs/heads/... or refs/tags/... spelling pins the
+    # namespace; strip it HERE so the probe fallback below builds candidates
+    # without the qualifier (probing 'refs/heads/refs/heads/x' can never hit).
+    namespaces = ('heads', 'tags')
+    qualified = refpath.split('/')
+    if len(qualified) >= 3 and qualified[0] == 'refs' and qualified[1] in namespaces:
+        namespaces = (qualified[1],)
+        refpath = '/'.join(qualified[2:])
+
     ref, path = None, None
     ref_names = get_ref_names(user, github_user, github_project)
     if ref_names is not None:
@@ -127,8 +140,8 @@ def resolve_ref_and_path(user, github_user, github_project, refpath, kind):
         for i in range(start, 0, -1):
             candidate = '/'.join(parts[:i])
             if any(file_exists("https://codeload.github.com/%s/%s/zip/refs/%s/%s"
-                               % (github_user, github_project, refkind, candidate))
-                   for refkind in ('heads', 'tags')):
+                               % (github_user, github_project, refkind, quote(candidate, safe='/')))
+                   for refkind in namespaces):
                 ref, path = candidate, '/'.join(parts[i:])
                 break
     if ref is None:

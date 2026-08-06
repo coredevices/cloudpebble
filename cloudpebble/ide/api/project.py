@@ -1038,16 +1038,26 @@ def import_github(request):
 
     github_user = source.user
     github_project = source.project
-    if source.refpath:
-        # A /tree/, /blob/ or /commit/ URL is authoritative for both the ref
-        # and the subdirectory (the celery task resolves the ambiguous split
-        # against the repository's real refs); a separately-typed branch would
-        # conflict with it, so it is ignored.
+    refpath, kind = source.refpath, source.kind
+    if refpath and kind == 'tree' and '/' not in refpath:
+        # A slash-free /tree/<x> is unambiguously a branch or tag — exactly
+        # equivalent to typing it into the branch box, so every existing flow
+        # (add_remote included) stays available.
+        branch, refpath, kind = refpath, None, None
+    elif refpath:
+        # The URL is authoritative for both the ref and the subdirectory (the
+        # celery task resolves the ambiguous split against the repository's
+        # real refs); a separately-typed branch would conflict, so it is
+        # ignored.
         branch = ''
         if add_remote:
-            raise BadRequest(_("Linking a repository is not supported for /tree/ or /blob/ "
-                               "imports — import the project first, then add the remote from "
-                               "its settings."))
+            # Deliberately NOT suggesting to link later from settings: the
+            # project model has no notion of a subdirectory, so a linked push
+            # would re-find a project root in the full repository tree and
+            # could overwrite a different project there.
+            if kind == 'commit':
+                raise BadRequest(_("Linking a repository is not supported for commit imports."))
+            raise BadRequest(_("Linking a repository is not supported for subdirectory imports."))
 
     try:
         project = Project.objects.create(owner=request.user, name=name)
@@ -1060,7 +1070,7 @@ def import_github(request):
         project.save()
 
     task = do_import_github.delay(project.id, github_user, github_project, branch, delete_project=True,
-                                  github_refpath=source.refpath, github_kind=source.kind)
+                                  github_refpath=refpath, github_kind=kind)
     return {'task_id': task.task_id, 'project_id': project.id}
 
 

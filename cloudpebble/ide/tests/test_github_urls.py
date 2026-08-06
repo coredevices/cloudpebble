@@ -94,6 +94,13 @@ class TestParseGithubSource(TestCase):
                        'github.com/user/repo/'):
             self.assert_parsed(source, 'user', 'repo')
 
+    def test_encoded_delimiters_inside_path_survive(self):
+        # %23/%3F are DATA; only raw '?' and '#' delimit.
+        self.assert_parsed('github.com/user/repo/tree/main/faces/foo%23bar',
+                           'user', 'repo', 'tree', 'main/faces/foo#bar')
+        self.assert_parsed('github.com/user/repo/tree/main/a%3Fb?tab=x#frag',
+                           'user', 'repo', 'tree', 'main/a?b')
+
     def test_rejects_non_github(self):
         for source in ('gitlab.com/user/repo', 'https://example.com/user/repo', 'user', ''):
             self.assertIsNone(parse_github_source(source), source)
@@ -148,6 +155,8 @@ class TestNormalizeSubpath(TestCase):
         self.assertEqual('a/b', normalize_subpath('a/./b'))
 
     def test_rejects_escapes(self):
-        for bad in ('..', '../x', 'a/../../b'):
+        # 'a/..' cancels out arithmetically, but '..' has no legitimate place
+        # in a GitHub tree URL — reject rather than normalize to the root.
+        for bad in ('..', '../x', 'a/../../b', 'a/..', 'a/../b'):
             with self.assertRaises(ValueError):
                 normalize_subpath(bad)

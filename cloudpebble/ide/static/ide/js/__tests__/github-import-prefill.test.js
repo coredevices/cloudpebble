@@ -70,6 +70,15 @@ describe('GitHub import deep-link prefill', () => {
         expect(fields.branch).toBeUndefined();
     });
 
+    it('suggests the repo name for /blob/ and /commit/ URLs (tail is a file or SHA, not a name)', () => {
+        var blob = loadWithPath('/ide/import/github/user/repo/blob/main/src/app.js');
+        expect(blob.url).toBe('github.com/user/repo/blob/main/src/app.js');
+        expect(blob.name).toBe('repo');
+        var commit = loadWithPath('/ide/import/github/user/repo/commit/abc123');
+        expect(commit.url).toBe('github.com/user/repo/commit/abc123');
+        expect(commit.name).toBe('repo');
+    });
+
     it('keeps the legacy /<user>/<repo>/<branch> deep-link contract', () => {
         var fields = loadWithPath('/ide/import/github/user/repo/dev');
         expect(fields.url).toBe('github.com/user/repo');

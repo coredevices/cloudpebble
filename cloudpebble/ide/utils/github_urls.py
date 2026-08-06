@@ -24,7 +24,8 @@ __author__ = 'emindeniz99'
 #     ref names (split_ref_and_path below).
 GithubSource = namedtuple('GithubSource', ['user', 'project', 'kind', 'refpath'])
 
-# Accepted forms (query strings and fragments are ignored):
+# Accepted forms (raw query strings and fragments are stripped before
+# percent-decoding, so encoded delimiters survive inside path segments):
 #   user/repo
 #   github.com/user/repo[.git][/]           (bare, http, https, www; the
 #                                            legacy 'github.com:user/repo'
@@ -53,12 +54,11 @@ _SOURCE_RE = re.compile(r"""
             (?P<kind>tree|blob|commit)
             (?:
                 /
-                (?P<refpath>[^?\#]+?)
+                (?P<refpath>.+?)
             )?
         )?
     )?
     /?
-    (?:[?\#].*)?
     $
 """, re.VERBOSE)
 
@@ -68,7 +68,11 @@ def parse_github_source(source):
     :param source: whatever the user gave us (URL, shorthand, deep-link tail).
     :return: a GithubSource, or None if this isn't a recognizable GitHub source.
     """
-    match = _SOURCE_RE.match(unquote(source.strip()))
+    # Split the RAW string on the query/fragment delimiters first, THEN
+    # percent-decode: an encoded '#' or '?' inside a path segment
+    # (…/tree/main/faces/foo%23bar) is data, not a delimiter.
+    raw = source.strip().split('#', 1)[0].split('?', 1)[0]
+    match = _SOURCE_RE.match(unquote(raw))
     if match is None:
         return None
     kind = match.group('kind')
@@ -127,6 +131,11 @@ def normalize_subpath(path):
     absolute paths (deep links are attacker-suppliable). """
     if not path:
         return ''
+    if '..' in path.split('/'):
+        # Reject '..' outright rather than letting cancelling segments
+        # normalize away — deep links are attacker-suppliable and there is no
+        # legitimate reason for a GitHub tree URL to contain '..'.
+        raise ValueError("Invalid project path: %r" % path)
     normalized = posixpath.normpath(path.strip('/'))
     if normalized in ('.', ''):
         return ''

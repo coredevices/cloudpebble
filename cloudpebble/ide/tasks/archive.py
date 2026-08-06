@@ -25,6 +25,11 @@ __author__ = 'katharine'
 
 logger = logging.getLogger(__name__)
 
+# When a root_hint narrows an import to one project, the 400-entry limit
+# applies to that subtree — but the whole archive still needs a ceiling to
+# bound the root-finding scan over the repository it lives in.
+HINTED_ARCHIVE_SCAN_LIMIT = 50000
+
 
 def _public_export_url(path):
     return "/ide/export/%s" % path.lstrip('/')
@@ -168,11 +173,18 @@ def do_import_archive(project_id, archive, delete_project=False, wipe_existing=F
                 WORKER_SRC_DIR = 'worker_src/'
                 INCLUDE_SRC_DIR = 'include/'
 
-                if len(contents) > 400:
+                if len(contents) > (400 if root_hint is None else HINTED_ARCHIVE_SCAN_LIMIT):
                     raise InvalidProjectArchiveException("Too many files in zip file.")
 
                 archive_items = [ArchiveProjectItem(z, x) for x in contents]
                 base_dir, manifest_item = find_project_root_and_manifest(archive_items, root_hint=root_hint)
+                if root_hint is not None:
+                    # A subdirectory import only takes files under the hinted
+                    # project, so the size limit applies to that subtree — not
+                    # to the whole repository the project happens to live in.
+                    contents = [entry for entry in contents if entry.filename.startswith(base_dir)]
+                    if len(contents) > 400:
+                        raise InvalidProjectArchiveException("Too many files in the project directory.")
                 dir_end = len(base_dir)
 
                 def make_valid_filename(zip_entry):

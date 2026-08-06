@@ -233,8 +233,13 @@ $(function() {
             // .../import/github/<user>/<repo>/tree/<branch>/<subdir>). Hand
             // the whole thing to the server, which resolves branch vs
             // subdirectory against the repository's real refs.
-            $('#import-github-name').val(tail.length > 2 ? tail[tail.length - 1] : parts[4]);
-            $('#import-github-url').val('github.com/' + parts.slice(3).concat([]).join('/'));
+            // Suggest the subdirectory name for /tree/ URLs (it may still be
+            // part of a slashed branch name — the field is editable and the
+            // server resolves the truth); blob/commit tails are a filename or
+            // a SHA, so the repository name is the sane suggestion there.
+            var suggested = (tail[0] == 'tree' && tail.length > 2) ? tail[tail.length - 1] : parts[4];
+            $('#import-github-name').val(suggested);
+            $('#import-github-url').val('github.com/' + parts.slice(3).join('/'));
         } else {
             $('#import-github-name').val(parts[3]);
             $('#import-github-url').val('github.com/' + parts[3] + '/' + parts[4]);

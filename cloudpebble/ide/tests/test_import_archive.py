@@ -344,3 +344,57 @@ class TestWipeExisting(CloudpebbleTestCase):
         project = Project.objects.get(pk=self.project_id)
         self.assertEqual(project.source_files.count(), 1,
                          "Original files should be preserved after failed import")
+
+
+@mock.patch('ide.models.s3file.s3', fake_s3)
+class TestImportArchiveWithRootHint(CloudpebbleTestCase):
+    """ root_hint imports one project out of a multi-project repository
+    archive — including repositories bigger than the whole-archive file
+    limit, where only the hinted subtree's size should matter. """
+
+    def setUp(self):
+        self.login()
+
+    @staticmethod
+    def big_repo_bundle(filler_count):
+        spec = {
+            'repo-main/package.json': make_package(package_options={'name': 'rootproject'}),
+            'repo-main/src/main.c': '',
+            'repo-main/faces/slothvec/package.json': make_package(package_options={'name': 'sloth'}),
+            'repo-main/faces/slothvec/src/main.c': '',
+        }
+        for i in range(filler_count):
+            spec['repo-main/docs/filler-%d.txt' % i] = 'x'
+        return build_bundle(spec)
+
+    def test_hint_picks_the_nested_project(self):
+        bundle = self.big_repo_bundle(0)
+        do_import_archive(self.project_id, bundle, root_hint='faces/slothvec')
+        project = Project.objects.get(pk=self.project_id)
+        self.assertEqual(project.app_short_name, 'sloth')
+
+    def test_file_limit_applies_to_the_hinted_subtree_not_the_repo(self):
+        # 450 filler files: the whole archive is over the 400-entry limit,
+        # the hinted project is 2 files.
+        bundle = self.big_repo_bundle(450)
+        do_import_archive(self.project_id, bundle, root_hint='faces/slothvec')
+        project = Project.objects.get(pk=self.project_id)
+        self.assertEqual(project.app_short_name, 'sloth')
+
+    def test_unhinted_big_archive_is_still_rejected(self):
+        bundle = self.big_repo_bundle(450)
+        with self.assertRaises(InvalidProjectArchiveException):
+            do_import_archive(self.project_id, bundle)
+
+    def test_hinted_scan_has_a_ceiling(self):
+        # The subtree limit must not turn the pre-scan into an unbounded
+        # walk over arbitrarily huge repositories.
+        bundle = self.big_repo_bundle(450)
+        with mock.patch('ide.tasks.archive.HINTED_ARCHIVE_SCAN_LIMIT', 100):
+            with self.assertRaises(InvalidProjectArchiveException):
+                do_import_archive(self.project_id, bundle, root_hint='faces/slothvec')
+
+    def test_hint_with_no_project_there_fails(self):
+        bundle = self.big_repo_bundle(0)
+        with self.assertRaises(InvalidProjectArchiveException):
+            do_import_archive(self.project_id, bundle, root_hint='faces/missing')
