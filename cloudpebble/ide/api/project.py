@@ -19,7 +19,7 @@ from ide.models.files import SourceFile, ResourceFile, PublishedMedia
 from ide.tasks.archive import create_archive, do_import_archive
 from ide.tasks.build import run_compile
 from ide.tasks.gist import import_gist
-from ide.tasks.git import do_import_github
+from ide.tasks.git import do_import_github, get_ref_names
 from ide.utils.github_urls import parse_github_source
 from ide.utils.alloy_templates import list_alloy_templates, build_template_archive
 from ide.utils.c_templates import list_c_templates, build_c_template_archive
@@ -1051,13 +1051,23 @@ def import_github(request):
         # ignored.
         branch = ''
         if add_remote:
-            # Deliberately NOT suggesting to link later from settings: the
-            # project model has no notion of a subdirectory, so a linked push
-            # would re-find a project root in the full repository tree and
-            # could overwrite a different project there.
-            if kind == 'commit':
-                raise BadRequest(_("Linking a repository is not supported for commit imports."))
-            raise BadRequest(_("Linking a repository is not supported for subdirectory imports."))
+            if kind == 'tree':
+                # A slashed remainder may still be nothing but a branch name
+                # ('feature/foo') — resolve against the repository's real
+                # refs before refusing to link. When the ref list is
+                # unavailable the refusal below stays, conservatively.
+                ref_names = get_ref_names(request.user, github_user, github_project)
+                if ref_names is not None and refpath in ref_names:
+                    branch, refpath, kind = refpath, None, None
+            if refpath is not None:
+                # Deliberately NOT suggesting to link later from settings:
+                # the project model has no notion of a subdirectory, so a
+                # linked push would re-find a project root in the full
+                # repository tree and could overwrite a different project
+                # there.
+                if kind == 'commit':
+                    raise BadRequest(_("Linking a repository is not supported for commit imports."))
+                raise BadRequest(_("Linking a repository is not supported for subdirectory imports."))
 
     try:
         project = Project.objects.create(owner=request.user, name=name)

@@ -195,6 +195,34 @@ class TestFindProjectRootWithHint(TestCase):
         with self.assertRaises(InvalidProjectArchiveException):
             self.find(self.REPO, "slothvec")
 
+    def test_empty_hint_is_the_explicit_repository_root(self):
+        # A /blob/<ref>/<root-file> URL selects the repository root
+        # explicitly; the heuristic must not wander into nested projects.
+        base_dir, manifest = self.find(self.REPO, "")
+        self.assertEqual(base_dir, "repo-main/")
+        self.assertEqual(manifest.name, "repo-main/package.json")
+
+    def test_empty_hint_without_root_project_throws(self):
+        with self.assertRaises(InvalidProjectArchiveException):
+            self.find(["repo-main/faces/slothvec/package.json",
+                       "repo-main/faces/slothvec/src/"], "")
+
+    def test_hint_never_reads_manifests_outside_it(self):
+        # The hint must narrow BEFORE manifest contents are read, or a huge
+        # repository's out-of-tree manifests get opened and parsed for
+        # nothing.
+        read_paths = []
+
+        class RecordingItem(FakeProjectItem):
+            def read(inner):
+                read_paths.append(inner.name)
+                return super(RecordingItem, inner).read()
+
+        base_dir, manifest = find_project_root_and_manifest(
+            [RecordingItem(item) for item in self.REPO], root_hint="faces/slothvec")
+        self.assertEqual(base_dir, "repo-main/faces/slothvec/")
+        self.assertEqual(read_paths, ["repo-main/faces/slothvec/package.json"])
+
     def test_no_hint_keeps_existing_behavior(self):
         base_dir, manifest = find_project_root_and_manifest(
             [FakeProjectItem(item) for item in self.REPO])

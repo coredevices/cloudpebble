@@ -87,7 +87,13 @@ def do_import_github(project_id, github_user, github_project, github_branch, del
                 % (github_user, github_project, github_branch)
             )
 
-        return do_import_archive(project_id, archive.read(), root_hint=github_path or None)
+        # A URL that carried a refpath selected a directory EXPLICITLY — the
+        # empty path means "the repository root" (e.g. /blob/<ref>/<root
+        # file>), which is a real hint, not the absence of one: without it
+        # the importer's first-manifest heuristic could pick a nested
+        # project instead of the root one.
+        return do_import_archive(project_id, archive.read(),
+                                 root_hint=github_path if github_refpath else None)
     except Exception as e:
         if delete_project and project is not None:
             try:
@@ -125,7 +131,7 @@ def resolve_ref_and_path(user, github_user, github_project, refpath, kind):
         refpath = '/'.join(qualified[2:])
 
     ref, path = None, None
-    ref_names = get_ref_names(user, github_user, github_project)
+    ref_names = get_ref_names(user, github_user, github_project, namespaces)
     if ref_names is not None:
         ref, path = split_ref_and_path(refpath, ref_names)
     elif '/' in refpath:
@@ -157,12 +163,20 @@ def resolve_ref_and_path(user, github_user, github_project, refpath, kind):
     return ref, path
 
 
-def get_ref_names(user, github_user, github_project):
-    """ Branch + tag names, or None when the API is unavailable. """
+def get_ref_names(user, github_user, github_project, namespaces=('heads', 'tags')):
+    """ Ref names in the requested namespaces, or None when the API is
+    unavailable. A refs/heads|tags-qualified URL pins the namespace, and the
+    pin must reach the name list: with both merged, a tag could
+    longest-prefix-match a remainder the URL explicitly claimed as a branch. """
     try:
         g = get_github(user) if user is not None else Github()
         repo = g.get_repo("%s/%s" % (github_user, github_project))
-        return [b.name for b in repo.get_branches()] + [t.name for t in repo.get_tags()]
+        names = []
+        if 'heads' in namespaces:
+            names += [b.name for b in repo.get_branches()]
+        if 'tags' in namespaces:
+            names += [t.name for t in repo.get_tags()]
+        return names
     except Exception:
         return None
 

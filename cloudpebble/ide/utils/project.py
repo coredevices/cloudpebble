@@ -57,6 +57,11 @@ def _dir_matches_hint(base_dir, root_hint):
     stripped = base_dir.rstrip('/')
     if stripped == root_hint:
         return True
+    if root_hint == '':
+        # An explicitly-selected repository root (e.g. a /blob/<ref>/<file>
+        # URL naming a root-level file): the only other acceptable location
+        # is directly inside the archive's single wrapping folder.
+        return '/' not in stripped
     suffix = '/' + root_hint
     return stripped.endswith(suffix) and '/' not in stripped[:-len(suffix)]
 
@@ -87,6 +92,11 @@ def find_project_root_and_manifest(project_items, root_hint=None):
                 continue
             # Ensure that the file is actually a manifest file
             if dir_end + len(name) == len(base_dir):
+                # A root hint pins the project to one directory; check it
+                # BEFORE reading, so the manifests a big repository keeps
+                # outside that directory are never opened or parsed.
+                if root_hint is not None and not _dir_matches_hint(base_dir[:dir_end], root_hint):
+                    continue
                 content = item.read()
                 try:
                     if is_manifest(name, content):
@@ -100,11 +110,6 @@ def find_project_root_and_manifest(project_items, root_hint=None):
 
         # The base dir is the location of the manifest file without the manifest filename.
         base_dir = base_dir[:dir_end]
-
-        # A root hint pins the project to one directory; manifests anywhere
-        # else (e.g. the repository root) don't count.
-        if root_hint and not _dir_matches_hint(base_dir, root_hint):
-            continue
 
         # If we found a valid package.json, just return.
         if name == PACKAGE_MANIFEST:
@@ -130,6 +135,9 @@ def find_project_root_and_manifest(project_items, root_hint=None):
     if root_hint:
         raise InvalidProjectArchiveException(
             _("No valid Pebble project found at '%s' in this repository.") % root_hint)
+    if root_hint is not None:
+        raise InvalidProjectArchiveException(
+            _("No valid Pebble project found at the root of this repository."))
     if invalid_package_path:
         raise InvalidProjectArchiveException(_("The file %s does not contain a valid JSON object." % invalid_package_path))
     else:

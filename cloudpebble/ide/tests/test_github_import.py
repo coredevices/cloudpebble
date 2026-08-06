@@ -75,6 +75,27 @@ class TestResolveRefAndPath(TestCase):
         self.assertTrue(all('/zip/refs/heads/' in url for url in probed))
         self.assertTrue(all('refs/heads/refs' not in url for url in probed))
 
+    def test_qualified_ref_pins_the_namespace_on_the_api_path(self, get_ref_names):
+        # Branch 'release' and tag 'release/docs' both exist (legal
+        # cross-namespace names). A refs/heads-qualified URL must only be
+        # matched against branches, or the tag longest-prefix-wins wrongly.
+        def by_namespace(user, gh_user, gh_project, namespaces=('heads', 'tags')):
+            names = []
+            if 'heads' in namespaces:
+                names += ['main', 'release']
+            if 'tags' in namespaces:
+                names += ['release/docs', 'v1.0.0']
+            return names
+        get_ref_names.side_effect = by_namespace
+
+        self.assertEqual(('release', 'docs/app'),
+                         resolve_ref_and_path(None, 'u', 'r', 'refs/heads/release/docs/app', 'tree'))
+        self.assertEqual(('release/docs', 'app'),
+                         resolve_ref_and_path(None, 'u', 'r', 'refs/tags/release/docs/app', 'tree'))
+        # Unqualified stays cross-namespace, longest first.
+        self.assertEqual(('release/docs', 'app'),
+                         resolve_ref_and_path(None, 'u', 'r', 'release/docs/app', 'tree'))
+
     @mock.patch('ide.tasks.git.file_exists')
     def test_probe_quotes_unsafe_ref_characters(self, file_exists, get_ref_names):
         # A branch may legally contain '#' or '?'; raw in a probe URL they
@@ -134,6 +155,37 @@ class TestImportGithubApi(CloudpebbleTestCase):
             do_import_github, 'github.com/u/r/commit/abc123', add_remote='true')
         self.assertEqual(response.status_code, 400)
         self.assertIn('commit imports', json.loads(response.content)['error'])
+        do_import_github.delay.assert_not_called()
+
+    @mock.patch('ide.api.project.get_ref_names')
+    def test_slashed_branch_only_tree_url_keeps_linking(self, get_ref_names, do_import_github):
+        # /tree/feature/foo where feature/foo is purely a branch: resolving
+        # against the real refs must keep the linking flow available.
+        get_ref_names.return_value = ['main', 'feature/foo']
+        result = json.loads(self.import_repo(
+            do_import_github, 'github.com/u/r/tree/feature/foo', add_remote='true').content)
+        self.assertTrue(result['success'], msg=result.get('error'))
+        project = Project.objects.get(pk=result['project_id'])
+        self.assertEqual(project.github_branch, 'feature/foo')
+        args, kwargs = do_import_github.delay.call_args
+        self.assertEqual(args[3], 'feature/foo')
+        self.assertIsNone(kwargs['github_refpath'])
+
+    @mock.patch('ide.api.project.get_ref_names')
+    def test_slashed_subdirectory_still_rejects_linking(self, get_ref_names, do_import_github):
+        get_ref_names.return_value = ['main', 'feature/foo']
+        response = self.import_repo(
+            do_import_github, 'github.com/u/r/tree/feature/foo/src', add_remote='true')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('subdirectory imports', json.loads(response.content)['error'])
+
+    @mock.patch('ide.api.project.get_ref_names')
+    def test_slashed_tree_rejects_linking_when_refs_unavailable(self, get_ref_names, do_import_github):
+        # No ref list (rate limit, private repo): stay conservative.
+        get_ref_names.return_value = None
+        response = self.import_repo(
+            do_import_github, 'github.com/u/r/tree/feature/foo', add_remote='true')
+        self.assertEqual(response.status_code, 400)
         do_import_github.delay.assert_not_called()
 
     def test_subdirectory_without_linking_passes_the_refpath(self, do_import_github):
