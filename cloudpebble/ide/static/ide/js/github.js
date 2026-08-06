@@ -63,7 +63,7 @@ CloudPebble.GitHub = (function() {
             var hook_force = pane.find('#github-repo-hook-force').is(':checked');
 
             if(repo_branch == null || repo_branch.length == 0) {
-                repo_branch = "master";
+                repo_branch = "main";
             }
 
             if((new_repo === CloudPebble.ProjectInfo.github.repo || !new_repo && !CloudPebble.ProjectInfo.github.repo) &&

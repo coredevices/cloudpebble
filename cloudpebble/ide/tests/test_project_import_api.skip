@@ -53,7 +53,7 @@ class TestProjectImportApi(TestCase):
         response = self.client.post('/ide/import/github', {
             'name': 'github-import',
             'repo': 'github.com/example/repo',
-            'branch': 'master',
+            'branch': 'main',
             'add_remote': 'false',
         })
         payload = json.loads(response.content)
