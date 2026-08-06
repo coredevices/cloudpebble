@@ -1,5 +1,6 @@
 import base64
 import io
+import posixpath
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from urllib.request import urlopen, Request
@@ -22,6 +23,7 @@ from ide.models.project import Project
 from ide.tasks import do_import_archive, run_compile
 from ide.tasks.archive import get_filename_variant
 from ide.utils.git import git_sha, git_blob
+from ide.utils.github_urls import split_ref_and_path, normalize_subpath
 from ide.utils.project import find_project_root_and_manifest, BaseProjectItem, InvalidProjectArchiveException, MANIFEST_KINDS
 from ide.utils.sdk import generate_manifest_dict, generate_manifest, generate_wscript_file, load_manifest_dict, manifest_name_for_project
 from utils.td_helper import send_td_event
@@ -40,7 +42,8 @@ def exception_reason(error):
 
 
 @shared_task(acks_late=True)
-def do_import_github(project_id, github_user, github_project, github_branch, delete_project=False):
+def do_import_github(project_id, github_user, github_project, github_branch, delete_project=False,
+                     github_refpath=None, github_kind=None):
     project = None
     user = None
     try:
@@ -49,6 +52,18 @@ def do_import_github(project_id, github_user, github_project, github_branch, del
             user = project.owner
         except:
             pass
+
+        github_path = ''
+        if github_refpath:
+            # A /tree/ or /blob/ URL: the branch and the subdirectory are one
+            # ambiguous string until matched against the repository's refs.
+            github_branch, github_path = resolve_ref_and_path(
+                user, github_user, github_project, github_refpath, github_kind)
+        if not github_branch:
+            # codeload resolves HEAD to the repository's default branch, so an
+            # empty branch imports what visitors see — instead of the old
+            # hardcoded 'master', which broke every main-default repository.
+            github_branch = 'HEAD'
 
         url = "https://github.com/%s/%s/archive/%s.zip" % (github_user, github_project, github_branch)
         auth_url = get_authenticated_archive_url(user, github_user, github_project, github_branch)
@@ -68,7 +83,7 @@ def do_import_github(project_id, github_user, github_project, github_branch, del
                 % (github_user, github_project, github_branch)
             )
 
-        return do_import_archive(project_id, archive.read())
+        return do_import_archive(project_id, archive.read(), root_hint=github_path or None)
     except Exception as e:
         if delete_project and project is not None:
             try:
@@ -80,10 +95,63 @@ def do_import_github(project_id, github_user, github_project, github_branch, del
                 'reason': exception_reason(e),
                 'github_user': github_user,
                 'github_project': github_project,
-                'github_branch': github_branch
+                'github_branch': github_branch,
+                'github_refpath': github_refpath
             }
         }, user=user)
         raise
+
+
+def resolve_ref_and_path(user, github_user, github_project, refpath, kind):
+    """ Resolve a /tree/ or /blob/ remainder ("<ref>[/<path>]") into a real
+    (ref, subdirectory) pair. Branch names may contain slashes, so the split
+    is decided against the repository's actual refs — via the GitHub API when
+    possible, else by probing which archive actually exists (longest candidate
+    first), the way gitpick and gitingest resolve GitHub web URLs. """
+    if kind == 'commit':
+        return refpath, ''
+
+    ref, path = None, None
+    ref_names = get_ref_names(user, github_user, github_project)
+    if ref_names is not None:
+        ref, path = split_ref_and_path(refpath, ref_names)
+    elif '/' in refpath:
+        # No API access (rate limit, private repo without a token): probe the
+        # public archive endpoint. Longest first, so 'feature/foo/src' tries
+        # branch 'feature/foo' before branch 'feature'. The refs-qualified
+        # codeload form MUST be used here: bare archive/<x>.zip answers 200
+        # for junk like 'main/anything', while zip/refs/heads/<x> is strict
+        # (measured: refs/heads/main 200, refs/heads/main/faces 404).
+        parts = refpath.split('/')
+        start = len(parts) if kind == 'tree' else len(parts) - 1
+        for i in range(start, 0, -1):
+            candidate = '/'.join(parts[:i])
+            if any(file_exists("https://codeload.github.com/%s/%s/zip/refs/%s/%s"
+                               % (github_user, github_project, refkind, candidate))
+                   for refkind in ('heads', 'tags')):
+                ref, path = candidate, '/'.join(parts[i:])
+                break
+    if ref is None:
+        ref, path = split_ref_and_path(refpath, None)
+
+    if kind == 'blob':
+        # A blob URL names a file; the project is the directory it lives in.
+        path = posixpath.dirname(path)
+    try:
+        path = normalize_subpath(path)
+    except ValueError:
+        raise Exception("Invalid project path in GitHub URL: '%s'" % refpath)
+    return ref, path
+
+
+def get_ref_names(user, github_user, github_project):
+    """ Branch + tag names, or None when the API is unavailable. """
+    try:
+        g = get_github(user) if user is not None else Github()
+        repo = g.get_repo("%s/%s" % (github_user, github_project))
+        return [b.name for b in repo.get_branches()] + [t.name for t in repo.get_tags()]
+    except Exception:
+        return None
 
 
 def file_exists(url):

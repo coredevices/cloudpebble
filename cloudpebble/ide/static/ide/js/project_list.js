@@ -178,14 +178,14 @@ $(function() {
             active_set.find('.errors').removeClass('hide').text(gettext("You must specify a project name."));
             return;
         }
-        // This is identical to the regex used on the server.
+        // A prefix check only — the server (ide.utils.github_urls) is the
+        // authority and also understands /tree/<ref>/<subdir> and /blob/ URLs.
         if(!/^(?:https?:\/\/|git@|git:\/\/)?(?:www\.)?github\.com[\/:]([\w.-]+)\/([\w.-]+?)(?:\.git|\/|$)/.test(url)) {
             active_set.find('.errors').removeClass('hide').text(gettext("You must specify a complete GitHub project URL"));
             return;
         }
-        if(branch.length == 0) {
-            branch = 'master';
-        }
+        // An empty branch imports the repository's default branch (the old
+        // hardcoded 'master' fallback broke every main-default repository).
         disable_import_controls();
         active_set.find('.progress').removeClass('hide');
         do_import(Ajax.Post('/ide/import/github', {
@@ -227,10 +227,20 @@ $(function() {
     if (path.indexOf('/ide/import/github/') === 0) {
         var parts = path.substr(1).split('/');
         $('#import-prompt').modal();
-        $('#import-github-name').val(parts[3]);
-        $('#import-github-url').val('github.com/' + parts[3] + '/' + parts[4]);
-        if (parts.length > 5) {
-            $('#import-github-branch').val(parts.slice(5).join('/'));
+        var tail = parts.slice(5).filter(function(p) { return p.length > 0; });
+        if (tail.length > 1 && (tail[0] == 'tree' || tail[0] == 'blob' || tail[0] == 'commit')) {
+            // A GitHub web URL shape (e.g. the appstore's "Remix" button:
+            // .../import/github/<user>/<repo>/tree/<branch>/<subdir>). Hand
+            // the whole thing to the server, which resolves branch vs
+            // subdirectory against the repository's real refs.
+            $('#import-github-name').val(tail.length > 2 ? tail[tail.length - 1] : parts[4]);
+            $('#import-github-url').val('github.com/' + parts.slice(3).concat([]).join('/'));
+        } else {
+            $('#import-github-name').val(parts[3]);
+            $('#import-github-url').val('github.com/' + parts[3] + '/' + parts[4]);
+            if (tail.length) {
+                $('#import-github-branch').val(tail.join('/'));
+            }
         }
         $('a[href=#import-github]').tab('show');
     }

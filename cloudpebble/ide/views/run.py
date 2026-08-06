@@ -104,7 +104,7 @@ def run_app(request, app_id):
     github_import_url = ''
     if source and 'github.com/' in source:
         # Extract account/project from URL like https://github.com/user/repo
-        gh_match = re.search(r'github\.com/([^/]+/[^/]+)', source)
+        gh_match = re.search(r"github\.com/([\w.-]+/[\w.-]+(?:/(?:tree|blob|commit)/[^\s'\"?#]+)?)", source)
         if gh_match:
             github_import_url = '/ide/import/github/%s' % gh_match.group(1)
 

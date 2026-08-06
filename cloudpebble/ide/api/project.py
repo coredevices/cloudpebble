@@ -20,6 +20,7 @@ from ide.tasks.archive import create_archive, do_import_archive
 from ide.tasks.build import run_compile
 from ide.tasks.gist import import_gist
 from ide.tasks.git import do_import_github
+from ide.utils.github_urls import parse_github_source
 from ide.utils.alloy_templates import list_alloy_templates, build_template_archive
 from ide.utils.c_templates import list_c_templates, build_c_template_archive
 from utils.td_helper import send_td_event
@@ -1029,14 +1030,24 @@ def import_zip(request):
 def import_github(request):
     name = request.POST['name']
     repo = request.POST['repo']
-    branch = request.POST['branch']
+    branch = request.POST.get('branch', '')
     add_remote = (request.POST['add_remote'] == 'true')
-    match = re.match(r'^(?:https?://|git@|git://)?(?:www\.)?github\.com[/:]([\w.-]+)/([\w.-]+?)(?:\.git|/|$)', repo)
-    if match is None:
+    source = parse_github_source(repo)
+    if source is None:
         raise BadRequest(_("Invalid Github URL."))
 
-    github_user = match.group(1)
-    github_project = match.group(2)
+    github_user = source.user
+    github_project = source.project
+    if source.refpath:
+        # A /tree/, /blob/ or /commit/ URL is authoritative for both the ref
+        # and the subdirectory (the celery task resolves the ambiguous split
+        # against the repository's real refs); a separately-typed branch would
+        # conflict with it, so it is ignored.
+        branch = ''
+        if add_remote:
+            raise BadRequest(_("Linking a repository is not supported for /tree/ or /blob/ "
+                               "imports — import the project first, then add the remote from "
+                               "its settings."))
 
     try:
         project = Project.objects.create(owner=request.user, name=name)
@@ -1045,10 +1056,11 @@ def import_github(request):
 
     if add_remote:
         project.github_repo = "%s/%s" % (github_user, github_project)
-        project.github_branch = branch
+        project.github_branch = branch or None
         project.save()
 
-    task = do_import_github.delay(project.id, github_user, github_project, branch, delete_project=True)
+    task = do_import_github.delay(project.id, github_user, github_project, branch, delete_project=True,
+                                  github_refpath=source.refpath, github_kind=source.kind)
     return {'task_id': task.task_id, 'project_id': project.id}
 
 
