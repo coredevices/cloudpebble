@@ -86,6 +86,23 @@ def parse_github_source(source):
     return GithubSource(match.group('user'), match.group('project'), kind, refpath)
 
 
+def split_ref_qualifier(refpath):
+    """ Strip GitHub's self-qualified "refs/heads/..." / "refs/tags/..."
+    spelling (which its Raw button emits) off a /tree/ or /blob/ remainder.
+
+    This is the single authority for the rule — the ref resolver and the
+    import API both need it, and a second copy could silently drift.
+
+    :return: (namespaces, refpath) — the namespaces the URL pinned
+        (('heads',) or ('tags',), or both when unqualified) and the
+        remainder without the qualifier.
+    """
+    parts = refpath.split('/')
+    if len(parts) >= 3 and parts[0] == 'refs' and parts[1] in ('heads', 'tags'):
+        return (parts[1],), '/'.join(parts[2:])
+    return ('heads', 'tags'), refpath
+
+
 def split_ref_and_path(refpath, ref_names):
     """ Split a /tree/ or /blob/ remainder into (ref, path).
 
@@ -99,21 +116,20 @@ def split_ref_and_path(refpath, ref_names):
     only decides the cross-namespace case (tag "release" vs branch
     "release/1.0") in favor of the more specific ref.
 
-    GitHub's self-qualified spellings ("refs/heads/<branch>/..." and
-    "refs/tags/<tag>/...", which its Raw button emits) are recognized: the
-    refs/... prefix is stripped and the remainder matched as usual.
+    Callers strip GitHub's self-qualified refs/heads|tags spelling first,
+    with split_ref_qualifier() — which also tells them which namespace the
+    URL pinned, something this function has no use for.
 
-    :param refpath: "<ref>" or "<ref>/<path>" (already stripped of slashes).
-    :param ref_names: iterable of the repository's branch and tag names. Pass
-        None when the list is unavailable — the first segment is then taken as
-        the ref, which is correct for every ref without a slash in its name
-        (commit SHAs included, since a SHA is never slashed).
+    :param refpath: "<ref>" or "<ref>/<path>" (slashes and any refs/...
+        qualifier already stripped).
+    :param ref_names: iterable of the repository's ref names in the
+        namespaces the URL allows. Pass None when the list is unavailable —
+        the first segment is then taken as the ref, which is correct for
+        every ref without a slash in its name (commit SHAs included, since a
+        SHA is never slashed).
     :return: (ref, path) — path is '' when the remainder is just a ref.
     """
     parts = refpath.split('/')
-    if len(parts) >= 3 and parts[0] == 'refs' and parts[1] in ('heads', 'tags'):
-        parts = parts[2:]
-        refpath = '/'.join(parts)
     if len(parts) == 1:
         return refpath, ''
     if ref_names is not None:

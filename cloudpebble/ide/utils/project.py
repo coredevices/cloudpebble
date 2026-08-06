@@ -132,14 +132,16 @@ def find_project_root_and_manifest(project_items, root_hint=None):
         return base_dir, manifest_item
 
     # If we didn't find a valid project but we did find a broken manifest file, complain about it specifically.
+    # (Under a hint, manifests are only ever read inside the hinted directory,
+    # so a broken one is always the actionable diagnosis.)
+    if invalid_package_path:
+        raise InvalidProjectArchiveException(_("The file %s does not contain a valid JSON object." % invalid_package_path))
     if root_hint:
         raise InvalidProjectArchiveException(
             _("No valid Pebble project found at '%s' in this repository.") % root_hint)
     if root_hint is not None:
         raise InvalidProjectArchiveException(
             _("No valid Pebble project found at the root of this repository."))
-    if invalid_package_path:
-        raise InvalidProjectArchiveException(_("The file %s does not contain a valid JSON object." % invalid_package_path))
     else:
         raise InvalidProjectArchiveException(
             _(

@@ -9,7 +9,7 @@ from unittest import mock
 from django.test import TestCase
 
 from ide.models.project import Project
-from ide.tasks.git import resolve_ref_and_path
+from ide.tasks.git import do_import_github, resolve_ref_and_path
 from ide.utils.cloudpebble_test import CloudpebbleTestCase
 
 
@@ -39,7 +39,7 @@ class TestResolveRefAndPath(TestCase):
 
     def test_invalid_path_fails_loud(self, get_ref_names):
         get_ref_names.return_value = self.REFS
-        with self.assertRaises(Exception):
+        with self.assertRaisesRegex(Exception, 'Invalid project path'):
             resolve_ref_and_path(None, 'u', 'r', 'main/../etc', 'tree')
 
     @mock.patch('ide.tasks.git.file_exists')
@@ -157,11 +157,11 @@ class TestImportGithubApi(CloudpebbleTestCase):
         self.assertIn('commit imports', json.loads(response.content)['error'])
         do_import_github.delay.assert_not_called()
 
-    @mock.patch('ide.api.project.get_ref_names')
-    def test_slashed_branch_only_tree_url_keeps_linking(self, get_ref_names, do_import_github):
-        # /tree/feature/foo where feature/foo is purely a branch: resolving
-        # against the real refs must keep the linking flow available.
-        get_ref_names.return_value = ['main', 'feature/foo']
+    @mock.patch('ide.api.project.branch_exists')
+    def test_slashed_branch_only_tree_url_keeps_linking(self, branch_exists, do_import_github):
+        # /tree/feature/foo where feature/foo is purely a branch: one branch
+        # probe must keep the linking flow available.
+        branch_exists.return_value = True
         result = json.loads(self.import_repo(
             do_import_github, 'github.com/u/r/tree/feature/foo', add_remote='true').content)
         self.assertTrue(result['success'], msg=result.get('error'))
@@ -171,22 +171,65 @@ class TestImportGithubApi(CloudpebbleTestCase):
         self.assertEqual(args[3], 'feature/foo')
         self.assertIsNone(kwargs['github_refpath'])
 
-    @mock.patch('ide.api.project.get_ref_names')
-    def test_slashed_subdirectory_still_rejects_linking(self, get_ref_names, do_import_github):
-        get_ref_names.return_value = ['main', 'feature/foo']
+    @mock.patch('ide.api.project.branch_exists')
+    def test_qualified_branch_tree_url_keeps_linking(self, branch_exists, do_import_github):
+        # The refs/heads-qualified spelling of the same URL must link too —
+        # and the probe must see the UNQUALIFIED name.
+        branch_exists.return_value = True
+        result = json.loads(self.import_repo(
+            do_import_github, 'github.com/u/r/tree/refs/heads/feature/foo', add_remote='true').content)
+        self.assertTrue(result['success'], msg=result.get('error'))
+        self.assertEqual(branch_exists.call_args[0][3], 'feature/foo')
+        project = Project.objects.get(pk=result['project_id'])
+        self.assertEqual(project.github_branch, 'feature/foo')
+
+    @mock.patch('ide.api.project.branch_exists')
+    def test_tags_qualified_tree_url_rejects_linking(self, branch_exists, do_import_github):
+        # A tag is not a branch; linking to one makes no sense and the
+        # probe must not even run.
+        response = self.import_repo(
+            do_import_github, 'github.com/u/r/tree/refs/tags/v1.0.0', add_remote='true')
+        self.assertEqual(response.status_code, 400)
+        branch_exists.assert_not_called()
+
+    @mock.patch('ide.api.project.branch_exists')
+    def test_slashed_subdirectory_still_rejects_linking(self, branch_exists, do_import_github):
+        branch_exists.return_value = False
         response = self.import_repo(
             do_import_github, 'github.com/u/r/tree/feature/foo/src', add_remote='true')
         self.assertEqual(response.status_code, 400)
         self.assertIn('subdirectory imports', json.loads(response.content)['error'])
 
-    @mock.patch('ide.api.project.get_ref_names')
-    def test_slashed_tree_rejects_linking_when_refs_unavailable(self, get_ref_names, do_import_github):
-        # No ref list (rate limit, private repo): stay conservative.
-        get_ref_names.return_value = None
+    @mock.patch('ide.api.project.branch_exists')
+    def test_slashed_tree_rejects_linking_when_probe_unavailable(self, branch_exists, do_import_github):
+        # Probe can't answer (rate limit, private repo): stay conservative.
+        branch_exists.return_value = None
         response = self.import_repo(
             do_import_github, 'github.com/u/r/tree/feature/foo', add_remote='true')
         self.assertEqual(response.status_code, 400)
         do_import_github.delay.assert_not_called()
+
+    def test_blob_with_linking_gets_its_own_reason(self, do_import_github):
+        response = self.import_repo(
+            do_import_github, 'github.com/u/r/blob/main/package.json', add_remote='true')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('file-link imports', json.loads(response.content)['error'])
+
+    def test_url_refpath_wins_over_a_typed_branch(self, do_import_github):
+        # The URL is authoritative: a conflicting typed branch is dropped.
+        result = json.loads(self.import_repo(
+            do_import_github, 'github.com/u/r/tree/main/faces/x', branch='dev').content)
+        self.assertTrue(result['success'], msg=result.get('error'))
+        args, kwargs = do_import_github.delay.call_args
+        self.assertEqual(args[3], '')
+        self.assertEqual(kwargs['github_refpath'], 'main/faces/x')
+
+    def test_branch_only_tree_url_wins_over_a_typed_branch(self, do_import_github):
+        result = json.loads(self.import_repo(
+            do_import_github, 'github.com/u/r/tree/main', branch='dev').content)
+        self.assertTrue(result['success'], msg=result.get('error'))
+        args, kwargs = do_import_github.delay.call_args
+        self.assertEqual(args[3], 'main')
 
     def test_subdirectory_without_linking_passes_the_refpath(self, do_import_github):
         result = json.loads(self.import_repo(
@@ -196,3 +239,61 @@ class TestImportGithubApi(CloudpebbleTestCase):
         self.assertEqual(args[3], '')
         self.assertEqual(kwargs['github_refpath'], 'main/faces/x')
         self.assertEqual(kwargs['github_kind'], 'tree')
+
+
+@mock.patch('ide.tasks.git.do_import_archive')
+@mock.patch('ide.tasks.git.urlopen')
+@mock.patch('ide.tasks.git.file_exists')
+@mock.patch('ide.tasks.git.get_ref_names')
+class TestDoImportGithubGlue(CloudpebbleTestCase):
+    """ The glue in do_import_github itself: which archive URL is fetched
+    and which root_hint reaches do_import_archive, per URL kind. """
+
+    def setUp(self):
+        self.login()
+
+    def run_import(self, get_ref_names, file_exists, urlopen, do_import_archive,
+                   branch='', refpath=None, kind=None, refs=('main',)):
+        get_ref_names.return_value = list(refs)
+        file_exists.return_value = True
+        urlopen.return_value.read.return_value = b'zipbytes'
+        do_import_github(self.project_id, 'u', 'r', branch,
+                         github_refpath=refpath, github_kind=kind)
+        url = file_exists.call_args[0][0]
+        root_hint = do_import_archive.call_args[1]['root_hint']
+        return url, root_hint
+
+    def test_empty_branch_imports_the_default_branch(self, *mocks):
+        # The headline fix: codeload HEAD, not a hardcoded 'master'.
+        url, root_hint = self.run_import(*mocks)
+        self.assertTrue(url.endswith('/u/r/archive/HEAD.zip'), url)
+        self.assertIsNone(root_hint)
+
+    def test_typed_branch_is_fetched_verbatim(self, *mocks):
+        url, root_hint = self.run_import(*mocks, branch='dev')
+        self.assertTrue(url.endswith('/u/r/archive/dev.zip'), url)
+        self.assertIsNone(root_hint)
+
+    def test_tree_with_subdirectory_hints_the_subdirectory(self, *mocks):
+        url, root_hint = self.run_import(*mocks, refpath='main/faces/x', kind='tree')
+        self.assertTrue(url.endswith('/u/r/archive/main.zip'), url)
+        self.assertEqual(root_hint, 'faces/x')
+
+    def test_blob_at_root_hints_the_explicit_root(self, *mocks):
+        url, root_hint = self.run_import(*mocks, refpath='main/package.json', kind='blob')
+        self.assertEqual(root_hint, '')
+
+    def test_commit_gets_no_hint(self, *mocks):
+        # A commit URL selects a revision, not a directory — nested-project
+        # repos must import exactly like a branch-box import.
+        url, root_hint = self.run_import(*mocks, refpath='abc123', kind='commit')
+        self.assertTrue(url.endswith('/u/r/archive/abc123.zip'), url)
+        self.assertIsNone(root_hint)
+
+    def test_pure_slashed_branch_tree_gets_no_hint(self, *mocks):
+        # /tree/feature/foo (whole remainder is a branch) must behave like
+        # typing feature/foo into the branch box.
+        url, root_hint = self.run_import(*mocks, refpath='feature/foo', kind='tree',
+                                         refs=('feature/foo',))
+        self.assertTrue(url.endswith('/u/r/archive/feature/foo.zip'), url)
+        self.assertIsNone(root_hint)

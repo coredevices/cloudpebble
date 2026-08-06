@@ -238,6 +238,10 @@ $(function() {
             // server resolves the truth); blob/commit tails are a filename or
             // a SHA, so the repository name is the sane suggestion there.
             var suggested = (tail[0] == 'tree' && tail.length > 2) ? tail[tail.length - 1] : parts[4];
+            // location.pathname keeps percent-encoding; the URL field must
+            // stay encoded (the server decodes it) but a suggested NAME
+            // should read as text. Malformed encodings just stay as-is.
+            try { suggested = decodeURIComponent(suggested); } catch (e) {}
             $('#import-github-name').val(suggested);
             $('#import-github-url').val('github.com/' + parts.slice(3).join('/'));
         } else {

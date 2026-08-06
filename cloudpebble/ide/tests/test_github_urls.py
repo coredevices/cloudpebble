@@ -6,7 +6,7 @@ appstore's "Remix on CloudPebble" button URLs). Dependency-free on purpose:
 
 from unittest import TestCase
 
-from ide.utils.github_urls import parse_github_source, split_ref_and_path, normalize_subpath
+from ide.utils.github_urls import parse_github_source, split_ref_qualifier, split_ref_and_path, normalize_subpath
 
 
 class TestParseGithubSource(TestCase):
@@ -130,17 +130,34 @@ class TestSplitRefAndPath(TestCase):
     def test_unknown_ref_falls_back_to_first_segment(self):
         self.assertEqual(('sha123', 'a/b'), split_ref_and_path('sha123/a/b', self.REFS))
 
-    def test_refs_heads_spelling(self):
-        self.assertEqual(('feature/foo', 'src'),
-                         split_ref_and_path('refs/heads/feature/foo/src', self.REFS))
-
-    def test_refs_tags_spelling(self):
-        self.assertEqual(('v1.0.0', 'dir'),
-                         split_ref_and_path('refs/tags/v1.0.0/dir', self.REFS))
-
     def test_no_ref_list_falls_back_to_first_segment(self):
         self.assertEqual(('main', 'faces/slothvec'),
                          split_ref_and_path('main/faces/slothvec', None))
+
+
+class TestSplitRefQualifier(TestCase):
+    def test_unqualified_passes_through(self):
+        self.assertEqual((('heads', 'tags'), 'main/faces'),
+                         split_ref_qualifier('main/faces'))
+
+    def test_refs_heads_pins_and_strips(self):
+        self.assertEqual((('heads',), 'feature/foo/src'),
+                         split_ref_qualifier('refs/heads/feature/foo/src'))
+
+    def test_refs_tags_pins_and_strips(self):
+        self.assertEqual((('tags',), 'v1.0.0/dir'),
+                         split_ref_qualifier('refs/tags/v1.0.0/dir'))
+
+    def test_strips_exactly_once(self):
+        # A branch literally named 'refs/heads/x' stays addressable through
+        # one extra qualifier — only the outermost is a spelling.
+        self.assertEqual((('heads',), 'refs/heads/x'),
+                         split_ref_qualifier('refs/heads/refs/heads/x'))
+
+    def test_composes_with_split_ref_and_path(self):
+        namespaces, refpath = split_ref_qualifier('refs/heads/feature/foo/src')
+        self.assertEqual(('feature/foo', 'src'),
+                         split_ref_and_path(refpath, ['main', 'feature/foo']))
 
 
 class TestNormalizeSubpath(TestCase):

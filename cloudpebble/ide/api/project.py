@@ -19,8 +19,8 @@ from ide.models.files import SourceFile, ResourceFile, PublishedMedia
 from ide.tasks.archive import create_archive, do_import_archive
 from ide.tasks.build import run_compile
 from ide.tasks.gist import import_gist
-from ide.tasks.git import do_import_github, get_ref_names
-from ide.utils.github_urls import parse_github_source
+from ide.tasks.git import do_import_github, branch_exists
+from ide.utils.github_urls import parse_github_source, split_ref_qualifier
 from ide.utils.alloy_templates import list_alloy_templates, build_template_archive
 from ide.utils.c_templates import list_c_templates, build_c_template_archive
 from utils.td_helper import send_td_event
@@ -1053,12 +1053,15 @@ def import_github(request):
         if add_remote:
             if kind == 'tree':
                 # A slashed remainder may still be nothing but a branch name
-                # ('feature/foo') — resolve against the repository's real
-                # refs before refusing to link. When the ref list is
-                # unavailable the refusal below stays, conservatively.
-                ref_names = get_ref_names(request.user, github_user, github_project)
-                if ref_names is not None and refpath in ref_names:
-                    branch, refpath, kind = refpath, None, None
+                # ('feature/foo', or the refs/heads-qualified spelling of
+                # one) — probe the repository before refusing to link. One
+                # branch lookup, deliberately not the paginate-every-ref
+                # list, which is unbounded inside a web request. When the
+                # probe can't answer, the refusal below stays, conservatively.
+                namespaces, candidate = split_ref_qualifier(refpath)
+                if 'heads' in namespaces and branch_exists(
+                        request.user, github_user, github_project, candidate):
+                    branch, refpath, kind = candidate, None, None
             if refpath is not None:
                 # Deliberately NOT suggesting to link later from settings:
                 # the project model has no notion of a subdirectory, so a
@@ -1067,6 +1070,8 @@ def import_github(request):
                 # there.
                 if kind == 'commit':
                     raise BadRequest(_("Linking a repository is not supported for commit imports."))
+                if kind == 'blob':
+                    raise BadRequest(_("Linking a repository is not supported for file-link imports."))
                 raise BadRequest(_("Linking a repository is not supported for subdirectory imports."))
 
     try:

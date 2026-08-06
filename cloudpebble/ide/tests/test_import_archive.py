@@ -356,7 +356,7 @@ class TestImportArchiveWithRootHint(CloudpebbleTestCase):
         self.login()
 
     @staticmethod
-    def big_repo_bundle(filler_count):
+    def big_repo_bundle(filler_count, filler_dir='docs'):
         spec = {
             'repo-main/package.json': make_package(package_options={'name': 'rootproject'}),
             'repo-main/src/main.c': '',
@@ -364,7 +364,7 @@ class TestImportArchiveWithRootHint(CloudpebbleTestCase):
             'repo-main/faces/slothvec/src/main.c': '',
         }
         for i in range(filler_count):
-            spec['repo-main/docs/filler-%d.txt' % i] = 'x'
+            spec['repo-main/%s/filler-%d.txt' % (filler_dir, i)] = 'x'
         return build_bundle(spec)
 
     def test_hint_picks_the_nested_project(self):
@@ -385,6 +385,14 @@ class TestImportArchiveWithRootHint(CloudpebbleTestCase):
         bundle = self.big_repo_bundle(450)
         with self.assertRaises(InvalidProjectArchiveException):
             do_import_archive(self.project_id, bundle)
+
+    def test_hinted_subtree_over_the_project_limit_is_rejected(self):
+        # The per-project limit still binds when the hinted project ITSELF
+        # is huge — the subtree filter must not quietly raise it to the
+        # scan ceiling.
+        bundle = self.big_repo_bundle(450, filler_dir='faces/slothvec/docs')
+        with self.assertRaisesRegex(InvalidProjectArchiveException, 'project directory'):
+            do_import_archive(self.project_id, bundle, root_hint='faces/slothvec')
 
     def test_hinted_scan_has_a_ceiling(self):
         # The subtree limit must not turn the pre-scan into an unbounded

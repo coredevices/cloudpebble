@@ -24,7 +24,7 @@ from ide.models.project import Project
 from ide.tasks import do_import_archive, run_compile
 from ide.tasks.archive import get_filename_variant
 from ide.utils.git import git_sha, git_blob
-from ide.utils.github_urls import split_ref_and_path, normalize_subpath
+from ide.utils.github_urls import split_ref_qualifier, split_ref_and_path, normalize_subpath
 from ide.utils.project import find_project_root_and_manifest, BaseProjectItem, InvalidProjectArchiveException, MANIFEST_KINDS
 from ide.utils.sdk import generate_manifest_dict, generate_manifest, generate_wscript_file, load_manifest_dict, manifest_name_for_project
 from utils.td_helper import send_td_event
@@ -87,13 +87,18 @@ def do_import_github(project_id, github_user, github_project, github_branch, del
                 % (github_user, github_project, github_branch)
             )
 
-        # A URL that carried a refpath selected a directory EXPLICITLY — the
-        # empty path means "the repository root" (e.g. /blob/<ref>/<root
-        # file>), which is a real hint, not the absence of one: without it
-        # the importer's first-manifest heuristic could pick a nested
-        # project instead of the root one.
-        return do_import_archive(project_id, archive.read(),
-                                 root_hint=github_path if github_refpath else None)
+        # A /blob/ URL names a FILE, so its resolved directory — even the
+        # empty one, for a root-level file — is an explicit choice, and the
+        # empty path becomes the explicit repository-root hint. For /tree/
+        # and /commit/ URLs an empty path just means "the whole tree": those
+        # keep the same first-manifest heuristic a branch-box import gets,
+        # so a repository whose only project is nested imports identically
+        # through either door.
+        if github_kind == 'blob':
+            root_hint = github_path
+        else:
+            root_hint = github_path or None
+        return do_import_archive(project_id, archive.read(), root_hint=root_hint)
     except Exception as e:
         if delete_project and project is not None:
             try:
@@ -124,11 +129,7 @@ def resolve_ref_and_path(user, github_user, github_project, refpath, kind):
     # A self-qualified refs/heads/... or refs/tags/... spelling pins the
     # namespace; strip it HERE so the probe fallback below builds candidates
     # without the qualifier (probing 'refs/heads/refs/heads/x' can never hit).
-    namespaces = ('heads', 'tags')
-    qualified = refpath.split('/')
-    if len(qualified) >= 3 and qualified[0] == 'refs' and qualified[1] in namespaces:
-        namespaces = (qualified[1],)
-        refpath = '/'.join(qualified[2:])
+    namespaces, refpath = split_ref_qualifier(refpath)
 
     ref, path = None, None
     ref_names = get_ref_names(user, github_user, github_project, namespaces)
@@ -161,6 +162,29 @@ def resolve_ref_and_path(user, github_user, github_project, refpath, kind):
     except ValueError:
         raise Exception("Invalid project path in GitHub URL: '%s'" % refpath)
     return ref, path
+
+
+def branch_exists(user, github_user, github_project, branch):
+    """ True/False whether the branch exists, or None when the API is
+    unavailable. One request — unlike get_ref_names, which paginates every
+    branch and tag and so must never run inside a web request. """
+    try:
+        try:
+            g = get_github(user) if user is not None else Github()
+        except Exception:
+            # No linked GitHub account — public repositories still answer
+            # anonymously.
+            g = Github()
+        repo = g.get_repo("%s/%s" % (github_user, github_project))
+        try:
+            repo.get_branch(branch)
+            return True
+        except GithubException as e:
+            if e.status == 404:
+                return False
+            raise
+    except Exception:
+        return None
 
 
 def get_ref_names(user, github_user, github_project, namespaces=('heads', 'tags')):
