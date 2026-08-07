@@ -1042,7 +1042,13 @@ def import_github(request):
     if refpath and kind == 'tree' and '/' not in refpath:
         # A slash-free /tree/<x> is unambiguously a branch or tag — exactly
         # equivalent to typing it into the branch box, so every existing flow
-        # (add_remote included) stays available.
+        # stays available. Linking is the exception: a linked remote does
+        # pull/push through repo.get_branch(), so a TAG must not be stored as
+        # github_branch — probe first, and refuse only on a definite "not a
+        # branch" (an unanswerable probe keeps the branch-box behavior, which
+        # never validated either).
+        if add_remote and branch_exists(request.user, github_user, github_project, refpath) is False:
+            raise BadRequest(_("Linking a repository requires a branch; '%s' is not one.") % refpath)
         branch, refpath, kind = refpath, None, None
     elif refpath:
         # The URL is authoritative for both the ref and the subdirectory (the

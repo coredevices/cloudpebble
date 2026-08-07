@@ -113,6 +113,17 @@ class TestResolveRefAndPath(TestCase):
         self.assertTrue(all('#' not in url for url in probed))
 
     @mock.patch('ide.tasks.git.file_exists')
+    def test_probe_is_bounded_for_deep_refpaths(self, file_exists, get_ref_names):
+        # An attacker-supplied 60-segment URL must not turn the fallback
+        # into 60+ sequential probe requests on the worker.
+        get_ref_names.return_value = None
+        file_exists.return_value = False
+        deep = '/'.join('seg%d' % i for i in range(60))
+        self.assertEqual(('seg0', '/'.join('seg%d' % i for i in range(1, 60))),
+                         resolve_ref_and_path(None, 'u', 'r', deep, 'tree'))
+        self.assertLessEqual(file_exists.call_count, 20)
+
+    @mock.patch('ide.tasks.git.file_exists')
     def test_probe_miss_falls_back_to_first_segment(self, file_exists, get_ref_names):
         get_ref_names.return_value = None
         file_exists.return_value = False
@@ -132,7 +143,9 @@ class TestImportGithubApi(CloudpebbleTestCase):
         return self.client.post('/ide/import/github', {
             'name': 'imported', 'repo': repo, 'branch': branch, 'add_remote': add_remote})
 
-    def test_branch_only_tree_url_keeps_linking(self, do_import_github):
+    @mock.patch('ide.api.project.branch_exists')
+    def test_branch_only_tree_url_keeps_linking(self, branch_exists, do_import_github):
+        branch_exists.return_value = True
         result = json.loads(self.import_repo(
             do_import_github, 'github.com/u/r/tree/main', add_remote='true').content)
         self.assertTrue(result['success'], msg=result.get('error'))
@@ -170,6 +183,29 @@ class TestImportGithubApi(CloudpebbleTestCase):
         args, kwargs = do_import_github.delay.call_args
         self.assertEqual(args[3], 'feature/foo')
         self.assertIsNone(kwargs['github_refpath'])
+
+    @mock.patch('ide.api.project.branch_exists')
+    def test_slash_free_tag_with_linking_is_rejected(self, branch_exists, do_import_github):
+        # /tree/v1.0.0 + linking: the import would work (archives accept
+        # tags), but a linked remote pulls/pushes via get_branch() — a
+        # definite "not a branch" must refuse linking up front.
+        branch_exists.return_value = False
+        response = self.import_repo(
+            do_import_github, 'github.com/u/r/tree/v1.0.0', add_remote='true')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('requires a branch', json.loads(response.content)['error'])
+        do_import_github.delay.assert_not_called()
+
+    @mock.patch('ide.api.project.branch_exists')
+    def test_slash_free_linking_stays_available_when_probe_cannot_answer(self, branch_exists, do_import_github):
+        # Fail-open on an unanswerable probe: the branch box never validated
+        # either, and /tree/main must keep linking under a rate limit.
+        branch_exists.return_value = None
+        result = json.loads(self.import_repo(
+            do_import_github, 'github.com/u/r/tree/main', add_remote='true').content)
+        self.assertTrue(result['success'], msg=result.get('error'))
+        project = Project.objects.get(pk=result['project_id'])
+        self.assertEqual(project.github_branch, 'main')
 
     @mock.patch('ide.api.project.branch_exists')
     def test_qualified_branch_tree_url_keeps_linking(self, branch_exists, do_import_github):

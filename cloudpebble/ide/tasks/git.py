@@ -34,6 +34,10 @@ __author__ = 'katharine'
 
 logger = logging.getLogger(__name__)
 
+# Longest branch name (in slash-separated segments) the codeload probe
+# fallback will consider when the ref list is unavailable.
+MAX_PROBE_REF_SEGMENTS = 10
+
 
 def exception_reason(error):
     reason = str(error)
@@ -144,7 +148,12 @@ def resolve_ref_and_path(user, github_user, github_project, refpath, kind):
         # (measured: refs/heads/main 200, refs/heads/main/faces 404).
         parts = refpath.split('/')
         start = len(parts) if kind == 'tree' else len(parts) - 1
-        for i in range(start, 0, -1):
+        # Bound the loop: no real branch name has anywhere near this many
+        # slash-separated segments, and without a cap an attacker-supplied
+        # deep URL would turn the probe into hundreds of sequential HEAD
+        # requests on the worker. Deep PATHS still resolve fine as long as
+        # the branch itself fits the cap.
+        for i in range(min(start, MAX_PROBE_REF_SEGMENTS), 0, -1):
             candidate = '/'.join(parts[:i])
             if any(file_exists("https://codeload.github.com/%s/%s/zip/refs/%s/%s"
                                % (github_user, github_project, refkind, quote(candidate, safe='/')))
