@@ -175,8 +175,9 @@ def resolve_ref_and_path(user, github_user, github_project, refpath, kind):
 
 def branch_exists(user, github_user, github_project, branch):
     """ True/False whether the branch exists, or None when the API is
-    unavailable. One request — unlike get_ref_names, which paginates every
-    branch and tag and so must never run inside a web request. """
+    unavailable. A constant two API calls — unlike get_ref_names, which
+    paginates every branch and tag and so must never run inside a web
+    request. """
     try:
         try:
             g = get_github(user) if user is not None else Github()

@@ -156,7 +156,9 @@ class TestImportGithubApi(CloudpebbleTestCase):
         self.assertEqual(args[3], 'main')
         self.assertIsNone(kwargs['github_refpath'])
 
-    def test_subdirectory_with_linking_is_rejected(self, do_import_github):
+    @mock.patch('ide.api.project.branch_exists')
+    def test_subdirectory_with_linking_is_rejected(self, branch_exists, do_import_github):
+        branch_exists.return_value = False
         response = self.import_repo(
             do_import_github, 'github.com/u/r/tree/main/faces/x', add_remote='true')
         self.assertEqual(response.status_code, 400)
