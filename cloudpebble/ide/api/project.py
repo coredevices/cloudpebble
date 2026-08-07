@@ -19,7 +19,8 @@ from ide.models.files import SourceFile, ResourceFile, PublishedMedia
 from ide.tasks.archive import create_archive, do_import_archive
 from ide.tasks.build import run_compile
 from ide.tasks.gist import import_gist
-from ide.tasks.git import do_import_github
+from ide.tasks.git import do_import_github, branch_exists
+from ide.utils.github_urls import parse_github_source, split_ref_qualifier
 from ide.utils.alloy_templates import list_alloy_templates, build_template_archive
 from ide.utils.c_templates import list_c_templates, build_c_template_archive
 from utils.td_helper import send_td_event
@@ -1029,14 +1030,55 @@ def import_zip(request):
 def import_github(request):
     name = request.POST['name']
     repo = request.POST['repo']
-    branch = request.POST['branch']
+    branch = request.POST.get('branch', '')
     add_remote = (request.POST['add_remote'] == 'true')
-    match = re.match(r'^(?:https?://|git@|git://)?(?:www\.)?github\.com[/:]([\w.-]+)/([\w.-]+?)(?:\.git|/|$)', repo)
-    if match is None:
+    source = parse_github_source(repo)
+    if source is None:
         raise BadRequest(_("Invalid Github URL."))
 
-    github_user = match.group(1)
-    github_project = match.group(2)
+    github_user = source.user
+    github_project = source.project
+    refpath, kind = source.refpath, source.kind
+    if refpath and kind == 'tree' and '/' not in refpath:
+        # A slash-free /tree/<x> is unambiguously a branch or tag — exactly
+        # equivalent to typing it into the branch box, so every existing flow
+        # stays available. Linking is the exception: a linked remote does
+        # pull/push through repo.get_branch(), so a TAG must not be stored as
+        # github_branch — probe first, and refuse only on a definite "not a
+        # branch" (an unanswerable probe keeps the branch-box behavior, which
+        # never validated either).
+        if add_remote and branch_exists(request.user, github_user, github_project, refpath) is False:
+            raise BadRequest(_("Linking a repository requires a branch; '%s' is not one.") % refpath)
+        branch, refpath, kind = refpath, None, None
+    elif refpath:
+        # The URL is authoritative for both the ref and the subdirectory (the
+        # celery task resolves the ambiguous split against the repository's
+        # real refs); a separately-typed branch would conflict, so it is
+        # ignored.
+        branch = ''
+        if add_remote:
+            if kind == 'tree':
+                # A slashed remainder may still be nothing but a branch name
+                # ('feature/foo', or the refs/heads-qualified spelling of
+                # one) — probe the repository before refusing to link. One
+                # branch lookup, deliberately not the paginate-every-ref
+                # list, which is unbounded inside a web request. When the
+                # probe can't answer, the refusal below stays, conservatively.
+                namespaces, candidate = split_ref_qualifier(refpath)
+                if 'heads' in namespaces and branch_exists(
+                        request.user, github_user, github_project, candidate):
+                    branch, refpath, kind = candidate, None, None
+            if refpath is not None:
+                # Deliberately NOT suggesting to link later from settings:
+                # the project model has no notion of a subdirectory, so a
+                # linked push would re-find a project root in the full
+                # repository tree and could overwrite a different project
+                # there.
+                if kind == 'commit':
+                    raise BadRequest(_("Linking a repository is not supported for commit imports."))
+                if kind == 'blob':
+                    raise BadRequest(_("Linking a repository is not supported for file-link imports."))
+                raise BadRequest(_("Linking a repository is not supported for subdirectory imports."))
 
     try:
         project = Project.objects.create(owner=request.user, name=name)
@@ -1045,10 +1087,11 @@ def import_github(request):
 
     if add_remote:
         project.github_repo = "%s/%s" % (github_user, github_project)
-        project.github_branch = branch
+        project.github_branch = branch or None
         project.save()
 
-    task = do_import_github.delay(project.id, github_user, github_project, branch, delete_project=True)
+    task = do_import_github.delay(project.id, github_user, github_project, branch, delete_project=True,
+                                  github_refpath=refpath, github_kind=kind)
     return {'task_id': task.task_id, 'project_id': project.id}
 
 

@@ -173,7 +173,7 @@
                     <div class="control-group">
                         <label class="control-label" for="import-github-branch">{% trans "Branch (optional)" %}</label>
                         <div class="controls">
-                            <input type="text" id="import-github-branch" placeholder="master" />
+                            <input type="text" id="import-github-branch" placeholder="default branch" />
                         </div>
                     </div>
                     {% if user.github_repo_sync %}
@@ -202,5 +202,5 @@
 {{ alloy_templates|json_script:"alloy-template-data" }}
 <script src="/ide/jsi18n/"></script>
 <script src="{% static 'ide/js/csrf.js' %}?v=20260601" type="text/javascript"></script>
-<script src="{% static 'ide/js/project_list.js' %}?v=20260218b" type="text/javascript"></script>
+<script src="{% static 'ide/js/project_list.js' %}?v=20260807" type="text/javascript"></script>
 {% endblock %}

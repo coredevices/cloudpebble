@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+from urllib.parse import quote as http_quote
 
 import requests as http_requests
 from django.conf import settings
@@ -9,6 +10,8 @@ from django.http import HttpResponse, Http404, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_safe
+
+from ide.utils.github_urls import parse_github_source
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +61,31 @@ def _get_pbw_url(app_info):
     return '%s%s' % (settings.APPSTORE_API_BASE, pbw_file)
 
 
+def _github_import_url(source):
+    """Best import deep link for an appstore 'source' field, or ''.
+
+    The field may be prose, so the token containing github.com is picked out
+    and handed to the import URL parser — the single authority on which
+    shapes the importer accepts (tree/blob/commit deep links included).
+    Anything it rejects (ports, /releases/, unrecognized casing) degrades to
+    a plain repository link when a user/repo pair is discernible, rather
+    than a deep link that would fail to import."""
+    if not source or 'github.com' not in source.lower():
+        return ''
+    token = next((tok.strip('\'"<>(),.;:') for tok in source.split()
+                  if 'github.com' in tok.lower()), '')
+    parsed = parse_github_source(token)
+    if parsed:
+        pieces = [parsed.user, parsed.project]
+        if parsed.kind:
+            pieces += [parsed.kind, parsed.refpath]
+        return '/ide/import/github/%s' % http_quote('/'.join(pieces), safe='/')
+    gh_match = re.search(r"github\.com/([\w.-]+/[\w.-]+)", token)
+    if gh_match:
+        return '/ide/import/github/%s' % gh_match.group(1).removesuffix('.git')
+    return ''
+
+
 @require_safe
 @ensure_csrf_cookie
 def run_app(request, app_id):
@@ -99,14 +127,7 @@ def run_app(request, app_id):
     app_hearts = app_info.get('hearts', 0)
     app_uuid = app_info.get('uuid', '')
 
-    # Check if source is a GitHub URL
-    source = app_info.get('source') or ''
-    github_import_url = ''
-    if source and 'github.com/' in source:
-        # Extract account/project from URL like https://github.com/user/repo
-        gh_match = re.search(r'github\.com/([^/]+/[^/]+)', source)
-        if gh_match:
-            github_import_url = '/ide/import/github/%s' % gh_match.group(1)
+    github_import_url = _github_import_url(app_info.get('source') or '')
 
     return render(request, 'ide/run.html', {
         'app_id': app_id,

@@ -149,3 +149,81 @@ class TestFindProjectRoot(TestCase):
             "project/src/c/main.c",
             "project/resources/fonts/font.ttf",
         ], "project/", "project/package.json")
+
+
+class TestFindProjectRootWithHint(TestCase):
+    """ root_hint pins the search to one subdirectory — the /tree/<ref>/<subdir>
+    import case, where the repository may contain several projects. """
+
+    REPO = [
+        # A repository that is ALSO a valid project at its root (a library
+        # shipping its own demo), plus two nested projects — the shape that
+        # made unhinted imports pick the wrong one.
+        "repo-main/package.json",
+        "repo-main/src/",
+        "repo-main/faces/slothvec/package.json",
+        "repo-main/faces/slothvec/src/",
+        "repo-main/examples/other/package.json",
+    ]
+
+    def find(self, contents, root_hint):
+        return find_project_root_and_manifest(
+            [FakeProjectItem(item) for item in contents], root_hint=root_hint)
+
+    def test_hint_picks_nested_project_over_root(self):
+        base_dir, manifest = self.find(self.REPO, "faces/slothvec")
+        self.assertEqual(base_dir, "repo-main/faces/slothvec/")
+        self.assertEqual(manifest.name, "repo-main/faces/slothvec/package.json")
+
+    def test_hint_matches_archive_without_wrapper_dir(self):
+        base_dir, manifest = self.find(
+            ["faces/slothvec/package.json", "faces/slothvec/src/"], "faces/slothvec")
+        self.assertEqual(base_dir, "faces/slothvec/")
+
+    def test_hint_with_no_project_there_throws(self):
+        with self.assertRaises(InvalidProjectArchiveException):
+            self.find(self.REPO, "faces/missing")
+
+    def test_hint_does_not_match_deeper_manifests(self):
+        with self.assertRaises(InvalidProjectArchiveException):
+            self.find(self.REPO, "faces")
+
+    def test_hint_suffix_alone_is_not_enough(self):
+        # 'slothvec' names the right LEAF, but the project lives at
+        # faces/slothvec — a lazy suffix match would import it anyway and
+        # mask a wrong ref/path split upstream. It must fail loudly instead.
+        with self.assertRaises(InvalidProjectArchiveException):
+            self.find(self.REPO, "slothvec")
+
+    def test_empty_hint_is_the_explicit_repository_root(self):
+        # A /blob/<ref>/<root-file> URL selects the repository root
+        # explicitly; the heuristic must not wander into nested projects.
+        base_dir, manifest = self.find(self.REPO, "")
+        self.assertEqual(base_dir, "repo-main/")
+        self.assertEqual(manifest.name, "repo-main/package.json")
+
+    def test_empty_hint_without_root_project_throws(self):
+        with self.assertRaises(InvalidProjectArchiveException):
+            self.find(["repo-main/faces/slothvec/package.json",
+                       "repo-main/faces/slothvec/src/"], "")
+
+    def test_hint_never_reads_manifests_outside_it(self):
+        # The hint must narrow BEFORE manifest contents are read, or a huge
+        # repository's out-of-tree manifests get opened and parsed for
+        # nothing.
+        read_paths = []
+
+        class RecordingItem(FakeProjectItem):
+            def read(inner):
+                read_paths.append(inner.name)
+                return super(RecordingItem, inner).read()
+
+        base_dir, manifest = find_project_root_and_manifest(
+            [RecordingItem(item) for item in self.REPO], root_hint="faces/slothvec")
+        self.assertEqual(base_dir, "repo-main/faces/slothvec/")
+        self.assertEqual(read_paths, ["repo-main/faces/slothvec/package.json"])
+
+    def test_no_hint_keeps_existing_behavior(self):
+        base_dir, manifest = find_project_root_and_manifest(
+            [FakeProjectItem(item) for item in self.REPO])
+        self.assertEqual(base_dir, "repo-main/")
