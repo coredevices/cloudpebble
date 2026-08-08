@@ -253,6 +253,33 @@ class TestWipeExisting(CloudpebbleTestCase):
     def setUp(self):
         self.login()
 
+    def test_file_limit_ignores_files_outside_project_root(self):
+        """A GitHub zipball can contain many files that aren't part of the
+        project (docs, screenshots, etc). Only files inside the project root
+        count against the 400-file limit."""
+        spec = {
+            'repo/project/src/main.c': '',
+            'repo/project/appinfo.json': make_appinfo()
+        }
+        for i in range(450):
+            spec['repo/screenshots/shot%d.png' % i] = 'not-a-real-png'
+        # Directory entries (as GitHub zipballs contain) don't count either.
+        for i in range(450):
+            spec['repo/project/src/dir%d/' % i] = ''
+        do_import_archive(self.project_id, build_bundle(spec))
+        self.assertEqual(Project.objects.get(pk=self.project_id).source_files.count(), 1)
+
+    def test_file_limit_applies_to_project_files(self):
+        """More than 400 files inside the project root is rejected."""
+        spec = {
+            'src/main.c': '',
+            'appinfo.json': make_appinfo()
+        }
+        for i in range(450):
+            spec['src/extra%d.h' % i] = ''
+        with self.assertRaises(InvalidProjectArchiveException):
+            do_import_archive(self.project_id, build_bundle(spec))
+
     def test_wipe_existing_replaces_source_files(self):
         """Importing with wipe_existing=True replaces existing source files"""
         first_bundle = build_bundle({

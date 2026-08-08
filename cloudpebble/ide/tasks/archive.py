@@ -168,7 +168,13 @@ def do_import_archive(project_id, archive, delete_project=False, wipe_existing=F
                 WORKER_SRC_DIR = 'worker_src/'
                 INCLUDE_SRC_DIR = 'include/'
 
-                if len(contents) > 400:
+                # Ceiling on raw entry count. The user-facing limit is applied
+                # to files inside the project root below — GitHub pulls hand us
+                # a zipball of the whole repo, which can contain many files that
+                # aren't part of the project. Kept modest because
+                # find_project_root_and_manifest is O(n^2) in the worst case
+                # (every appinfo.json candidate rescans all entries).
+                if len(contents) > 2000:
                     raise InvalidProjectArchiveException("Too many files in zip file.")
 
                 archive_items = [ArchiveProjectItem(z, x) for x in contents]
@@ -194,11 +200,17 @@ def do_import_archive(project_id, archive, delete_project=False, wipe_existing=F
                 # Now iterate over the things we found, filter out invalid files and look for the manifest.
                 filtered_contents = []
                 for entry in contents:
+                    if entry.is_dir():
+                        continue
                     filename = make_valid_filename(entry)
                     if not filename or filename in MANIFEST_KINDS:
                         continue
                     else:
                         filtered_contents.append((filename, entry))
+
+                if len(filtered_contents) > 400:
+                    raise InvalidProjectArchiveException(
+                        "Too many files in project (%d; the limit is 400)." % len(filtered_contents))
 
                 with transaction.atomic():
                     if wipe_existing:
