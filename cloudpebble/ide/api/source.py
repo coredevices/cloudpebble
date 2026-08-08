@@ -9,12 +9,14 @@ from django.views.decorators.http import require_POST, require_safe
 from django.utils.translation import gettext as _
 from ide.models.project import Project
 from ide.models.files import SourceFile
+from utils.agent_token import allow_agent_token
 from utils.td_helper import send_td_event
 from utils.jsonview import json_view, BadRequest
 
 __author__ = "katharine"
 
 
+@allow_agent_token
 @require_POST
 @login_required
 @json_view
@@ -63,6 +65,7 @@ def create_source_file(request, project_id):
     }
 
 
+@allow_agent_token
 @require_safe
 @csrf_protect
 @login_required
@@ -162,6 +165,7 @@ def rename_source_file(request, project_id, file_id):
     }
 
 
+@allow_agent_token
 @require_POST
 @login_required
 @json_view
@@ -191,6 +195,7 @@ def save_source_file(request, project_id, file_id):
     return {"modified": time.mktime(source_file.last_modified.utctimetuple())}
 
 
+@allow_agent_token
 @require_POST
 @login_required
 @json_view
@@ -257,6 +262,7 @@ def create_binary_source_file(request, project_id):
     }
 
 
+@allow_agent_token
 @require_safe
 @csrf_protect
 @login_required
@@ -280,6 +286,7 @@ def download_source_file(request, project_id, file_id):
     return response
 
 
+@allow_agent_token
 @require_POST
 @login_required
 @json_view

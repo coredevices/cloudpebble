@@ -471,6 +471,42 @@ QEMU_PUBLIC_URL = _environ.get('QEMU_PUBLIC_URL', None) or _public_url or None
 QEMU_LAUNCH_AUTH_HEADER = _environ.get('QEMU_LAUNCH_AUTH_HEADER', 'secret')
 QEMU_LAUNCH_TIMEOUT = int(_environ.get('QEMU_LAUNCH_TIMEOUT', 25))
 
+AGENT_URL = _environ.get('AGENT_URL', '')
+# No default: an empty shared secret fails closed on both sides rather than letting a
+# guessable one ('secret') authenticate a public, quota-spending endpoint.
+# Generate with `openssl rand -hex 32`.
+AGENT_AUTH_HEADER = _environ.get('AGENT_AUTH_HEADER', '')
+# Feature flag: comma-separated user ids allowed to use the AI agent panel, or '*' for
+# everybody. Kept as raw strings -- ide.api.agent._check_enabled stringifies both sides,
+# and int() here would blow up at import time on the documented wildcard.
+AGENT_ENABLED_USERS = _environ.get('AGENT_ENABLED_USERS', '').replace(',', ' ').split()
+AGENT_MAX_TURNS_PER_DAY = int(_environ.get('AGENT_MAX_TURNS_PER_DAY', 50))
+# Gap timeout on the agent VM's event stream. Slow models go quiet for minutes
+# mid-generation; 900s cut a real turn off and reported it as a service outage.
+AGENT_TURN_READ_TIMEOUT = int(_environ.get('AGENT_TURN_READ_TIMEOUT', 1800))
+# How long a session may sit in 'running' with no new events before it is treated
+# as abandoned and healed. See ide.api.agent.heal_if_stale. Must stay above the
+# read timeout: below it this measures a model thinking, not a relay dying, and
+# at 240s it killed live turns.
+AGENT_STALE_TURN_SECONDS = int(_environ.get('AGENT_STALE_TURN_SECONDS',
+                                            AGENT_TURN_READ_TIMEOUT + 120))
+
+# Free tier: what a user gets before they bring their own provider. Deliberately
+# a cheap text-only model plus a vision describer -- a model that cannot see is
+# told so and stays honest, where a weak vision model invents what it "saw".
+AGENT_FREE_MODEL = _environ.get('AGENT_FREE_MODEL', 'deepseek-v4-flash')
+AGENT_FREE_API_BASE = _environ.get('AGENT_FREE_API_BASE', 'https://api.deepseek.com/anthropic')
+AGENT_FREE_API_KEY = _environ.get('AGENT_FREE_API_KEY', '')
+# Describer, used whenever the acting model has no vision of its own.
+AGENT_VISION_API_BASE = _environ.get('AGENT_VISION_API_BASE', 'https://openrouter.ai/api')
+AGENT_VISION_API_KEY = _environ.get('AGENT_VISION_API_KEY', '')
+AGENT_VISION_MODEL = _environ.get('AGENT_VISION_MODEL', 'mistralai/mistral-small-3.2-24b-instruct')
+# Anthropic sign-in. Empty disables it, which is the correct production value:
+# Anthropic offers no self-serve OAuth client registration, so the only id that
+# works belongs to Claude Code, and the consent screen would name that instead of
+# this app. Set it only for local testing.
+AGENT_ANTHROPIC_OAUTH_CLIENT_ID = _environ.get('AGENT_ANTHROPIC_OAUTH_CLIENT_ID', '')
+
 PHONE_SHORTURL = _environ.get('PHONE_SHORTURL', 'pbl.zip/sensors')
 
 FIREBASE_PROJECT_ID = _environ.get('FIREBASE_PROJECT_ID', 'coreapp-ce061')

@@ -1,0 +1,100 @@
+{
+  "_comment": [
+    "Model configurations for the agent bench. Secrets never live here: each",
+    "entry names the environment variable its key comes from, and switch.sh",
+    "refuses to run if that variable is unset.",
+    "",
+    "api_base empty  -> first-party Anthropic (Max subscription or ANTHROPIC_API_KEY).",
+    "api_base set    -> any Anthropic-format /v1/messages gateway.",
+    "vision false    -> the main model cannot see images, so screenshots are",
+    "                   routed through the vision describer instead.",
+    "",
+    "pricing is per MILLION tokens, from the provider's published rates. The SDK's total_cost_usd is computed at ANTHROPIC rates whatever model is behind the gateway, so it is meaningless for anything else -- it overstated a deepseek run by 37x. compare.py recomputes cost from these numbers."
+  ],
+  "vision_describer": {
+    "api_base": "https://openrouter.ai/api",
+    "key_env": "OPENROUTER_API_KEY",
+    "model": "mistralai/mistral-small-3.2-24b-instruct",
+    "_why": "Chosen on ACCURACY, not price. The describer costs ~$0.0001 against a $1.87 turn, so cheapness is the wrong objective -- a wrong description makes the main model change code for a screen it never saw.\nVerified on real screenshots: reads time and date correctly, names the actual artwork (planet, rocket, stars), and reports the stock 'Install an app to continue' screen.\nRejected: google/gemma-3-12b-it read the time correctly but hallucinated the scene ('a yellow bird with a red beak', 'hills or mounds of green' for a space scene). qwen/qwen3.8-max and openai/gpt-5-nano are mandatory-reasoning and returned no text at all -- they spend the whole budget thinking. google/gemini-2.5-flash-lite also passed and is free, a good fallback."
+  },
+  "models": {
+    "claude": {
+      "model": "claude-sonnet-5",
+      "api_base": "",
+      "key_env": null,
+      "vision": true,
+      "_notes": "Subscription auth via CLAUDE_CODE_OAUTH_TOKEN already on the VM.",
+      "pricing_per_mtok": {
+        "in": 2.0,
+        "out": 10.0,
+        "cache_read": 0.2,
+        "cache_write": 2.5
+      }
+    },
+    "kimi": {
+      "model": "kimi-k3",
+      "api_base": "https://api.moonshot.ai/anthropic",
+      "key_env": "MOONSHOT_API_KEY",
+      "vision": true,
+      "_notes": "Direct from Moonshot. Use this rather than kimi-or: OpenRouter reported cache_creation_input_tokens=0, so every turn re-sent ~100k uncached input.",
+      "pricing_per_mtok": {
+        "in": 3.0,
+        "out": 15.0,
+        "cache_read": 0.3,
+        "cache_write": 0.0
+      }
+    },
+    "kimi-or": {
+      "model": "moonshotai/kimi-k3",
+      "api_base": "https://openrouter.ai/api",
+      "key_env": "OPENROUTER_API_KEY",
+      "vision": true,
+      "_notes": "Kept for comparison. Also dropped long generations mid-stream: 'API Error: stream closed before completion'.",
+      "pricing_per_mtok": {
+        "in": 3.0,
+        "out": 15.0,
+        "cache_read": 0.3,
+        "cache_write": 0.0
+      }
+    },
+    "deepseek": {
+      "model": "deepseek-v4-flash",
+      "api_base": "https://api.deepseek.com/anthropic",
+      "key_env": "DEEPSEEK_API_KEY",
+      "vision": false,
+      "_notes": "Text only. DeepSeek's API rejects image content outright, so screenshots go through the vision describer.",
+      "pricing_per_mtok": {
+        "in": 0.14,
+        "out": 0.28,
+        "cache_read": 0.028,
+        "cache_write": 0.0
+      }
+    }
+  },
+  "pricing_by_model_id": {
+    "claude-sonnet-5": {
+      "in": 2.0,
+      "out": 10.0,
+      "cache_read": 0.2,
+      "cache_write": 2.5
+    },
+    "kimi-k3": {
+      "in": 3.0,
+      "out": 15.0,
+      "cache_read": 0.3,
+      "cache_write": 0.0
+    },
+    "moonshotai/kimi-k3": {
+      "in": 3.0,
+      "out": 15.0,
+      "cache_read": 0.3,
+      "cache_write": 0.0
+    },
+    "deepseek-v4-flash": {
+      "in": 0.14,
+      "out": 0.28,
+      "cache_read": 0.028,
+      "cache_write": 0.0
+    }
+  }
+}

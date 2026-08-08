@@ -22,6 +22,7 @@ from ide.tasks.gist import import_gist
 from ide.tasks.git import do_import_github
 from ide.utils.alloy_templates import list_alloy_templates, build_template_archive
 from ide.utils.c_templates import list_c_templates, build_c_template_archive
+from utils.agent_token import allow_agent_token
 from utils.td_helper import send_td_event
 from ide.utils.crypto import encrypt_value, decrypt_value, ENV_VAR_MASK
 from utils.jsonview import json_view, BadRequest
@@ -404,6 +405,7 @@ Pebble.addEventListener("ready", function(e) {
 """
 
 
+@allow_agent_token
 @require_safe
 @login_required
 @json_view
@@ -465,6 +467,7 @@ def project_info(request, project_id):
     }
 
 
+@allow_agent_token
 @require_POST
 @login_required
 @json_view
@@ -496,6 +499,7 @@ def _serialize_build(build, project):
     }
 
 
+@allow_agent_token
 @require_safe
 @login_required
 @json_view
@@ -526,6 +530,7 @@ def build_history(request, project_id):
     return {"builds": out}
 
 
+@allow_agent_token
 @require_safe
 @login_required
 @json_view
@@ -544,6 +549,7 @@ def build_log(request, project_id, build_id):
     return {"log": log}
 
 
+@allow_agent_token
 @require_safe
 @login_required
 @json_view
@@ -559,6 +565,7 @@ DOWNLOAD_CONTENT_TYPES = {
 }
 
 
+@allow_agent_token
 @require_safe
 @login_required
 def build_download(request, project_id, build_id, filename):

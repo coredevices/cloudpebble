@@ -9,6 +9,7 @@ from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST, require_safe
 from ide.models.project import Project
 from ide.models.files import ResourceFile, ResourceIdentifier, ResourceVariant
+from utils.agent_token import allow_agent_token
 from utils.td_helper import send_td_event
 from utils.jsonview import json_view, BadRequest
 import utils.s3 as s3
@@ -36,20 +37,29 @@ def decode_resource_id_options(request):
     }
 
 
+@allow_agent_token
 @require_POST
 @login_required
 @json_view
 def create_resource(request, project_id):
     project = get_object_or_404(Project, pk=project_id, owner=request.user)
-    kind = request.POST['kind']
-    resource_ids = json.loads(request.POST['resource_ids'])
+    # get, not []: a caller that omits one of these -- the agent, or anything
+    # else driving this by API -- deserves "kind is required", not a 500 with a
+    # MultiValueDictKeyError traceback.
+    try:
+        kind = request.POST['kind']
+        file_name = request.POST['file_name']
+        resource_ids = json.loads(request.POST['resource_ids'])
+        new_tags = json.loads(request.POST.get('new_tags', '[]'))
+    except KeyError as e:
+        raise BadRequest(_("Missing required field: %s") % e.args[0])
+    except ValueError:
+        raise BadRequest(_("resource_ids and new_tags must be valid JSON."))
     posted_file = request.FILES.get('file', None)
-    file_name = request.POST['file_name']
     if kind == 'font':
         ext = os.path.splitext(file_name)[1].lower()
         if ext not in ('.ttf', '.otf'):
             raise BadRequest(_("Font resources must have a .ttf or .otf file extension."))
-    new_tags = json.loads(request.POST['new_tags'])
     resources = []
     try:
         with transaction.atomic():
@@ -84,12 +94,15 @@ def create_resource(request, project_id):
     }}
 
 
+@allow_agent_token
 @require_safe
 @login_required
 @json_view
 def resource_info(request, project_id, resource_id):
     project = get_object_or_404(Project, pk=project_id, owner=request.user)
-    resource = get_object_or_404(ResourceFile, pk=resource_id)
+    # Scoped to the project in the URL, not just to a valid pk: an agent token is
+    # minted for one project, and the id alone would let it read any other.
+    resource = get_object_or_404(ResourceFile, pk=resource_id, project=project)
     resources = resource.get_identifiers()
 
     send_td_event('cloudpebble_open_file', data={
@@ -112,6 +125,7 @@ def resource_info(request, project_id, resource_id):
     }
 
 
+@allow_agent_token
 @require_POST
 @login_required
 @json_view
@@ -158,6 +172,7 @@ def delete_variant(request, project_id, resource_id, variant):
     }}
 
 
+@allow_agent_token
 @require_POST
 @login_required
 @json_view
@@ -230,10 +245,15 @@ def update_resource(request, project_id, resource_id):
     }}
 
 
+@allow_agent_token
 @require_safe
 @login_required
 def show_resource(request, project_id, resource_id, variant):
-    resource = get_object_or_404(ResourceFile, pk=resource_id, project__owner=request.user)
+    # project=, not project__owner=: the owner check alone let any of the user's
+    # projects be read through any other's URL, which an agent token scoped to a
+    # single project must not be able to do.
+    project = get_object_or_404(Project, pk=project_id, owner=request.user)
+    resource = get_object_or_404(ResourceFile, pk=resource_id, project=project)
     if variant == '0':
         variant = ''
 
