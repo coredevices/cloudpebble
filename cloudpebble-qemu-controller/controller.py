@@ -116,11 +116,21 @@ def proxy_ws(emu, attr, subprotocols=[]):
         return  # unreachable but makes IDE happy.
     target_url = "ws://localhost:%d/" % getattr(emulator, attr)
     logging.info("proxy_ws: connecting to %s (attr=%s)", target_url, attr)
-    try:
-        client_ws = websocket.create_connection(target_url, subprotocols=subprotocols)
-    except:
-        logging.exception("proxy_ws: connection to %s failed.", target_url)
-        return 'failed', 500
+    # The target (notably pypkjs) may still be booting when the browser
+    # connects, so retry connection-refused for a while before giving up.
+    deadline = now() + 10
+    while True:
+        try:
+            client_ws = websocket.create_connection(target_url, subprotocols=subprotocols)
+            break
+        except ConnectionRefusedError:
+            if now() >= deadline:
+                logging.exception("proxy_ws: connection to %s refused until deadline.", target_url)
+                return 'failed', 500
+            gevent.sleep(0.25)
+        except:
+            logging.exception("proxy_ws: connection to %s failed.", target_url)
+            return 'failed', 500
     logging.info("proxy_ws: connected to %s, starting relay", target_url)
     alive = [True]
     def do_recv(direction, receive, send):
