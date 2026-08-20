@@ -553,6 +553,15 @@ def _github_pull_delta(user, project, repo, new_commit_sha):
     comparison = repo.compare(project.github_last_commit, new_commit_sha)
 
     if comparison.ahead_by == 0:
+        # ahead_by == 0 with behind_by > 0 means the branch was force-pushed
+        # backwards: the head's content differs from what we have, so a full
+        # pull is required. Advancing the SHA here without importing anything
+        # would make every subsequent pull a "nothing to do" no-op while the
+        # project stays stale.
+        if comparison.behind_by > 0:
+            raise Exception(
+                "Cannot delta-sync (status=%s, behind_by=%d); "
+                "falling back to full pull." % (comparison.status, comparison.behind_by))
         with transaction.atomic():
             project.github_last_commit = new_commit_sha
             project.github_last_sync = now()
@@ -629,7 +638,12 @@ def _apply_delta_changes(project, repo, root, manifest, changed_files, new_commi
 
         tag_map = {v: k for k, v in ResourceVariant.VARIANT_STRINGS.items() if v}
 
-        existing_sources = {s.project_path: s for s in project.source_files.all()}
+        # Key by (file_name, target) — the model's unique constraint — rather
+        # than by project_path. project_path always uses the FIRST DIR_MAP base
+        # (src/c/...), but the repo may legitimately use an alternate accepted
+        # layout (src/main.c, src/js/...); keying by path makes those lookups
+        # miss and the upsert then tries to create a duplicate row.
+        existing_sources = {(s.file_name, s.target): s for s in project.source_files.all()}
         existing_resources = {}
         for r in project.resources.all():
             dir_prefix = ResourceFile.DIR_MAP.get(r.kind, '') + '/'
@@ -651,7 +665,7 @@ def _apply_delta_changes(project, repo, root, manifest, changed_files, new_commi
                 else:
                     try:
                         base_filename, target = SourceFile.get_details_for_path(project.project_type, project_path)
-                        _upsert_source_file(project, repo, change, base_filename, target, existing_sources, project_path, content_map=content_by_sha)
+                        _upsert_source_file(project, repo, change, base_filename, target, existing_sources, content_map=content_by_sha)
                     except ValueError:
                         logger.debug("Skipping unrecognized file in delta: %s", filename)
                         continue
@@ -668,17 +682,20 @@ def _apply_delta_changes(project, repo, root, manifest, changed_files, new_commi
         project.save()
 
 
-def _upsert_source_file(project, repo, change, base_filename, target, existing_sources, project_path=None, content_map=None):
-    """Create or update a SourceFile from a changed file in a GitHub comparison."""
+def _upsert_source_file(project, repo, change, base_filename, target, existing_sources, content_map=None):
+    """Create or update a SourceFile from a changed file in a GitHub comparison.
+
+    existing_sources is keyed by (file_name, target) so a repo path in any
+    accepted layout (src/main.c or src/c/main.c) resolves to the same row.
+    """
     content = _resolve_content(repo, change, content_map)
 
-    if project_path is None:
-        project_path = change.filename
-    if project_path in existing_sources:
-        source = existing_sources[project_path]
+    key = (base_filename, target)
+    if key in existing_sources:
+        source = existing_sources[key]
     else:
         source = SourceFile.objects.create(project=project, file_name=base_filename, target=target)
-        existing_sources[project_path] = source
+        existing_sources[key] = source
 
     if source.is_editable_text:
         source.save_text(content.decode('utf-8') if isinstance(content, bytes) else content)
@@ -750,9 +767,10 @@ def _remove_file_by_path(project, filename, existing_sources, existing_resources
             base_filename, target = SourceFile.get_details_for_path(project.project_type, filename)
         except ValueError:
             return
-        if filename in existing_sources:
-            existing_sources[filename].delete()
-            del existing_sources[filename]
+        key = (base_filename, target)
+        if key in existing_sources:
+            existing_sources[key].delete()
+            del existing_sources[key]
         else:
             SourceFile.objects.filter(
                 project=project, file_name=base_filename, target=target).delete()

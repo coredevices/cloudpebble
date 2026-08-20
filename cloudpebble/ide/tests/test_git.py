@@ -456,12 +456,23 @@ class RemoveFileByPathTest(TestCase):
     def test_removes_existing_source_file(self):
         project = self._make_project()
         source = mock.MagicMock()
-        existing_sources = {'src/main.c': source}
+        existing_sources = {('main.c', 'app'): source}
         existing_resources = {}
 
         _remove_file_by_path(project, 'src/main.c', existing_sources, existing_resources)
         source.delete.assert_called_once()
-        self.assertNotIn('src/main.c', existing_sources)
+        self.assertNotIn(('main.c', 'app'), existing_sources)
+
+    def test_removes_source_file_regardless_of_repo_layout(self):
+        """src/main.c and src/c/main.c are the same SourceFile row; a removal
+        arriving under either path must find it."""
+        project = self._make_project()
+        source = mock.MagicMock()
+        existing_sources = {('main.c', 'app'): source}
+
+        _remove_file_by_path(project, 'src/c/main.c', existing_sources, {})
+        source.delete.assert_called_once()
+        self.assertNotIn(('main.c', 'app'), existing_sources)
 
     def test_removes_missing_source_file_from_db(self):
         project = self._make_project()
@@ -685,11 +696,27 @@ class GithubPullDeltaTest(TestCase):
         mock_now.return_value = '2025-01-01T00:00:00Z'
         comparison = mock.MagicMock()
         comparison.ahead_by = 0
+        comparison.behind_by = 0
         self.repo.compare.return_value = comparison
 
         result = _github_pull_delta(self.user, self.project, self.repo, 'newsha')
         self.assertFalse(result)
         self.assertEqual(self.project.github_last_commit, 'newsha')
+
+    def test_delta_pull_falls_back_when_branch_force_pushed_backwards(self):
+        """ahead_by=0 with behind_by>0 means the head's content differs from
+        what we imported; silently advancing the SHA would strand the project
+        on stale code with every later pull reporting "nothing to do"."""
+        comparison = mock.MagicMock()
+        comparison.ahead_by = 0
+        comparison.behind_by = 2
+        comparison.status = 'behind'
+        self.repo.compare.return_value = comparison
+
+        with self.assertRaises(Exception) as ctx:
+            _github_pull_delta(self.user, self.project, self.repo, 'newsha')
+        self.assertIn('falling back to full pull', str(ctx.exception))
+        self.assertEqual(self.project.github_last_commit, 'oldsha')
 
     def test_delta_pull_falls_back_on_behind_status(self):
         comparison = mock.MagicMock()
@@ -776,6 +803,23 @@ class ApplyDeltaChangesTest(TestCase):
 
         mock_upsert.assert_called_once()
         self.assertEqual(mock_upsert.call_args[0][2].filename, 'src/main.c')
+
+    def test_upsert_matches_existing_row_under_alternate_layout(self):
+        """A repo storing files at src/main.c (instead of the canonical
+        src/c/main.c) must update the existing ('main.c', 'app') row, not
+        attempt a duplicate create — that raised
+        "Source file with this Project, File name and Target already exists"."""
+        source = mock.MagicMock()
+        source.is_editable_text = True
+        existing_sources = {('main.c', 'app'): source}
+        change = self._make_change('src/main.c', 'modified', sha='sha1')
+
+        with mock.patch('ide.tasks.git.SourceFile') as MockSF:
+            _upsert_source_file(mock.MagicMock(), mock.MagicMock(), change,
+                                'main.c', 'app', existing_sources,
+                                content_map={'sha1': b'int x;'})
+        MockSF.objects.create.assert_not_called()
+        source.save_text.assert_called_once()
 
     @mock.patch('ide.tasks.git._sync_resource_files_from_manifest')
     @mock.patch('ide.tasks.git.load_manifest_dict')
@@ -952,7 +996,7 @@ class UpsertSourceFileTest(TestCase):
         repo = mock.MagicMock()
         existing_source = mock.MagicMock()
         existing_source.is_editable_text = True
-        existing_sources = {'src/main.c': existing_source}
+        existing_sources = {('main.c', 'app'): existing_source}
 
         change = mock.MagicMock()
         change.filename = 'src/main.c'
@@ -1080,7 +1124,10 @@ class ApplyDeltaChangesWithRootTest(TestCase):
                 _apply_delta_changes(project, repo, 'myproject', manifest, [change])
 
         mock_upsert.assert_called_once()
-        self.assertEqual(mock_upsert.call_args[0][6], 'src/main.c')
+        # Root-stripped path resolved to details: base_filename and target.
+        self.assertEqual(mock_upsert.call_args[0][3], 'main.c')
+        self.assertEqual(mock_upsert.call_args[0][4], 'app')
+        MockSF.get_details_for_path.assert_any_call('native', 'src/main.c')
 
     @mock.patch('ide.tasks.git._sync_resource_files_from_manifest')
     @mock.patch('ide.tasks.git.load_manifest_dict')
@@ -1356,6 +1403,7 @@ class GithubPullDeltaAtomicityTest(TestCase):
         mock_now.return_value = '2025-01-01T00:00:00Z'
         comparison = mock.MagicMock()
         comparison.ahead_by = 0
+        comparison.behind_by = 0
         self.repo.compare.return_value = comparison
 
         _github_pull_delta(self.user, self.project, self.repo, 'newsha')
