@@ -94,6 +94,7 @@
             <p><label>{% trans 'Started:' context 'date/time' %}</label> <span id="last-compilation-started">April 17, 2013, 11:50 a.m.</span></p>
             <p id="last-compilation-time"><label>{% trans 'Build time:' context 'duration' %}</label> <span>0.98 seconds</span></p>
             <p><label>{% trans 'Status:' %}</label> <span id="last-compilation-status" class="label label-success">Successful</span></p>
+            <p id="last-compilation-commit" class="hide"><label>{% trans 'Commit:' %}</label> <span></span></p>
             <p id="last-compilation-size-aplite" class="hide"><label>{% trans 'Aplite Size:' %}</label> <span class="text"></span></p>
             <p id="last-compilation-size-basalt" class="hide"><label>{% trans 'Basalt Size:' %}</label> <span class="text"></span></p>
             <p id="last-compilation-size-chalk" class="hide"><label>{% trans 'Chalk Size:' %}</label> <span class="text"></span></p>
@@ -122,6 +123,7 @@
                     <th>{% trans '#' context 'number symbol' %}</th>
                     <th>{% trans 'Date' %}</th>
                     <th>{% trans 'Status' %}</th>
+                    <th>{% trans 'Commit' %}</th>
                     <th colspan="2"></th>
                 </tr>
             </thead>

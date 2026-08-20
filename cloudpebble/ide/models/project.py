@@ -97,6 +97,23 @@ class Project(IdeModel):
                 self.project_dependencies.add(project)
 
     @property
+    def github_commit_display(self):
+        """The commit this project's content is based on, or None if not
+        GitHub-synced. Suffixed with '-dirty' if the project was edited in
+        CloudPebble after the last sync.
+
+        # ponytail: best-effort — last_modified is only bumped by file saves,
+        # so settings/dependency changes and deletions won't flag dirty, and
+        # the value is captured at build enqueue, not worker read. Upgrade
+        # path: bump last_modified on every build-input mutation."""
+        if not self.github_last_commit:
+            return None
+        sha = self.github_last_commit
+        if self.github_last_sync and self.last_modified and self.last_modified > self.github_last_sync:
+            sha += '-dirty'
+        return sha
+
+    @property
     def npm_name(self):
         """ Get the project's app_short_name as a valid NPM package name. """
         name = self.app_short_name.lower()

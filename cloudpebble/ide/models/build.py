@@ -48,6 +48,14 @@ class BuildResult(IdeModel):
     state = models.IntegerField(choices=STATE_CHOICES, default=STATE_WAITING)
     started = models.DateTimeField(auto_now_add=True, db_index=True)
     finished = models.DateTimeField(blank=True, null=True)
+    # GitHub commit the project was synced to when the build started, with a
+    # "-dirty" suffix if the project was edited after that sync (40 + 6 chars).
+    commit_sha = models.CharField(max_length=46, blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        if self._state.adding and self.commit_sha is None and self.project_id:
+            self.commit_sha = self.project.github_commit_display
+        super(BuildResult, self).save(*args, **kwargs)
 
     def _get_dir(self):
         if settings.AWS_ENABLED:

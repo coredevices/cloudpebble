@@ -489,6 +489,7 @@ def _serialize_build(build, project):
         'started': str(build.started),
         'finished': str(build.finished) if build.finished else None,
         'id': build.id,
+        'commit': build.commit_sha,
         'download': download,
         'log': log,
         'build_dir': build.get_url(),

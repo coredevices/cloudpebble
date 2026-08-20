@@ -13,11 +13,19 @@ CloudPebble.Compile = (function() {
     var mLastScrollTop = 'bottom';
     var mLastBuild = null;
 
+    var format_commit = function(commit) {
+        if (!commit) return '';
+        var dirty = /-dirty$/.test(commit);
+        var sha = dirty ? commit.slice(0, -'-dirty'.length) : commit;
+        return sha.substr(0, 7) + (dirty ? gettext(" (dirty)") : '');
+    };
+
     var build_history_row = function(build) {
         var tr = $('<tr>');
         tr.append($('<td class="build-id">' + (build.id === null ? '?' : build.id) + '</td>'));
         tr.append($('<td class="build-date">' + CloudPebble.Utils.FormatDatetime(build.started) + '</td>'));
         tr.append($('<td class="build-state">' + COMPILE_SUCCESS_STATES[build.state].english + '</td>'));
+        tr.append($('<td class="build-commit">').attr('title', build.commit || '').text(format_commit(build.commit)));
         var pbw_badge = $('<td class="build-pbw">').appendTo(tr);
         if (build.state == 3) {
             pbw_badge.append($('<a class="btn btn-small">')
@@ -334,6 +342,8 @@ CloudPebble.Compile = (function() {
         } else {
             pane.find('#last-compilation, .build-stats').removeClass('hide');
             pane.find('#last-compilation-started').text(CloudPebble.Utils.FormatDatetime(build.started));
+            pane.find('#last-compilation-commit').toggleClass('hide', !build.commit)
+                .find('span').attr('title', build.commit || '').text(format_commit(build.commit));
             if(build.state > 1) {
                 pane.find('#last-compilation-time').removeClass('hide').find('span').text(CloudPebble.Utils.FormatInterval(build.started, build.finished));
                 pane.find('#last-compilation-log').removeClass('hide').attr('href', build.log).off('click').click(function(e) {
