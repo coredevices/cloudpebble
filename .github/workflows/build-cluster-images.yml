@@ -11,7 +11,7 @@ on:
         description: "Pebble SDK version"
         default: "4.33.1"
   push:
-    branches: [main, master, cluster-images]
+    branches: [main, master]
     paths:
       - "cloudpebble-qemu-controller/**"
       - "cloudpebble-ycmd-proxy/**"
