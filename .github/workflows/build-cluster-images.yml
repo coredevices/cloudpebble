@@ -1,7 +1,19 @@
-# Build the cloudpebble emulator backend images and publish to GHCR, so they can
-# run on the pebble-cluster (k8s) instead of only via local docker-compose on the
-# Hetzner box. The qemu image compiles QEMU from source (coredevices/qemu) — slow.
-# Manual trigger + on changes to the two build contexts.
+# Build the cloudpebble emulator backend images and AUTO-DEPLOY them to the
+# pebble-cluster (k8s) via GitOps.
+#
+# Flow (Vercel/Railway-style push-to-deploy):
+#   push to main -> Tests workflow runs -> if green, this runs ->
+#   build only the changed service, tagged with the git SHA ->
+#   commit the new image tag into pebble-cluster (flux/apps/cloudpebble/<svc>.yaml)
+#   -> Flux reconciles the commit and rolls it out.
+#
+# The git SHA IS the version — nobody edits tags by hand. Every deploy is a git
+# commit in pebble-cluster, so rollback is `git revert` (or `make rollback APP=<svc>`).
+#
+# qemu uses strategy: Recreate (can't run two at once), so a bad qemu image means
+# downtime until reverted. Until the health-gated verify + auto-revert net is in
+# place, qemu is BUILD-ONLY: DEPLOY_QEMU stays "false". ycmd is rolling+readiness
+# (a bad image just leaves the old pod serving), so it deploys immediately.
 name: build-cluster-images
 
 on:
@@ -10,55 +22,129 @@ on:
       sdk_version:
         description: "Pebble SDK version"
         default: "4.33.1"
-  push:
-    branches: [main, master]
-    paths:
-      - "cloudpebble-qemu-controller/**"
-      - "cloudpebble-ycmd-proxy/**"
-      - ".github/workflows/build-cluster-images.yml"
+  # Deploy only AFTER the Tests workflow passes on main.
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [main]
 
 concurrency:
   group: build-cluster-images
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
-  REGISTRY: ghcr.io
   SDK_VERSION: ${{ github.event.inputs.sdk_version || '4.33.1' }}
-  NODE_VERSION_YCMD: "16.20.2"
+  # Flip to "true" only once the qemu verify + auto-revert net exists in pebble-cluster.
+  DEPLOY_QEMU: "false"
 
 jobs:
-  build:
+  # Gate on Tests success + detect which backend(s) actually changed.
+  changes:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    outputs:
+      qemu: ${{ steps.f.outputs.qemu }}
+      ycmd: ${{ steps.f.outputs.ycmd }}
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 2
+      - id: sha
+        run: echo "sha=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+      - id: f
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "qemu=true" >> "$GITHUB_OUTPUT"
+            echo "ycmd=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only HEAD^ HEAD || true)
+          echo "changed files:"; echo "$changed"
+          grep -q '^cloudpebble-qemu-controller/' <<<"$changed" && echo "qemu=true" >> "$GITHUB_OUTPUT" || echo "qemu=false" >> "$GITHUB_OUTPUT"
+          grep -q '^cloudpebble-ycmd-proxy/'      <<<"$changed" && echo "ycmd=true" >> "$GITHUB_OUTPUT" || echo "ycmd=false" >> "$GITHUB_OUTPUT"
+
+  build-deploy:
+    needs: changes
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
         include:
           - name: qemu
+            enabled: ${{ needs.changes.outputs.qemu }}
             context: cloudpebble-qemu-controller
+            image: cloudpebble-qemu
+            manifest: flux/apps/cloudpebble/qemu.yaml
             build_args: |
               PEBBLE_SDK_VERSION=${{ github.event.inputs.sdk_version || '4.33.1' }}
           - name: ycmd
+            enabled: ${{ needs.changes.outputs.ycmd }}
             context: cloudpebble-ycmd-proxy
+            image: cloudpebble-ycmd
+            manifest: flux/apps/cloudpebble/ycmd.yaml
             build_args: |
               PEBBLE_SDK_VERSION=${{ github.event.inputs.sdk_version || '4.33.1' }}
               NODE_VERSION=16.20.2
     steps:
+      - name: Skip unchanged service
+        if: matrix.enabled != 'true'
+        run: echo "no changes to ${{ matrix.name }} — skipping"
+
       - uses: actions/checkout@v4
+        if: matrix.enabled == 'true'
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: docker/setup-buildx-action@v3
+        if: matrix.enabled == 'true'
       - uses: docker/login-action@v3
+        if: matrix.enabled == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v6
+        if: matrix.enabled == 'true'
         with:
           context: ${{ matrix.context }}
           push: true
           tags: |
-            ghcr.io/coredevices/cloudpebble-${{ matrix.name }}:${{ env.SDK_VERSION }}
-            ghcr.io/coredevices/cloudpebble-${{ matrix.name }}:latest
+            ghcr.io/coredevices/${{ matrix.image }}:git-${{ needs.changes.outputs.sha }}
+            ghcr.io/coredevices/${{ matrix.image }}:latest
           build-args: ${{ matrix.build_args }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      - name: Deploy — commit image bump to pebble-cluster
+        # qemu stays build-only until the verify+revert net exists (Recreate = downtime risk).
+        if: matrix.enabled == 'true' && (matrix.name != 'qemu' || env.DEPLOY_QEMU == 'true')
+        env:
+          TOKEN: ${{ secrets.CLUSTER_DEPLOY_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$TOKEN" || { echo "::error::CLUSTER_DEPLOY_TOKEN not set — cannot deploy"; exit 1; }
+          new="ghcr.io/coredevices/${{ matrix.image }}:git-${{ needs.changes.outputs.sha }}"
+          git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/coredevices/pebble-cluster.git" cluster
+          cd cluster
+          sed -i -E "s|image: ghcr\.io/coredevices/${{ matrix.image }}:.*|image: ${new}|" "${{ matrix.manifest }}"
+          if git diff --quiet "${{ matrix.manifest }}"; then
+            echo "manifest already at ${new} — nothing to deploy"; exit 0
+          fi
+          git config user.name  "cluster-deploy[bot]"
+          git config user.email "cluster-deploy@users.noreply.github.com"
+          git add "${{ matrix.manifest }}"
+          git commit -m "deploy(${{ matrix.name }}): git-${{ needs.changes.outputs.sha }} (cloudpebble@${{ needs.changes.outputs.sha }})"
+          # small retry: another deploy may have pushed between clone and push
+          for i in 1 2 3; do
+            git push && break
+            echo "push rejected, rebasing…"; git pull --rebase --autostash; sleep 2
+          done
+
+      - name: Deploy skipped (qemu gated)
+        if: matrix.enabled == 'true' && matrix.name == 'qemu' && env.DEPLOY_QEMU != 'true'
+        run: echo "::notice::qemu image built + pushed, but auto-deploy is gated (DEPLOY_QEMU=false) until the verify+revert net lands."
