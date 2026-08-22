@@ -11,9 +11,11 @@
 # commit in pebble-cluster, so rollback is `git revert` (or `make rollback APP=<svc>`).
 #
 # qemu uses strategy: Recreate (can't run two at once), so a bad qemu image means
-# downtime until reverted. Until the health-gated verify + auto-revert net is in
-# place, qemu is BUILD-ONLY: DEPLOY_QEMU stays "false". ycmd is rolling+readiness
-# (a bad image just leaves the old pod serving), so it deploys immediately.
+# a brief outage until rolled back. Interim safety: Flux health-gates qemu (a bad
+# image flips the apps Kustomization Ready=False -> FluxReconcileFailing pages) and
+# `make rollback APP=qemu` reverts in one command. Fully-autonomous git-revert is
+# wired separately in pebble-cluster (pending the notification token). ycmd is
+# rolling+readiness (a bad image just leaves the old pod serving).
 name: build-cluster-images
 
 on:
@@ -34,8 +36,9 @@ concurrency:
 
 env:
   SDK_VERSION: ${{ github.event.inputs.sdk_version || '4.33.1' }}
-  # Flip to "true" only once the qemu verify + auto-revert net exists in pebble-cluster.
-  DEPLOY_QEMU: "false"
+  # qemu auto-deploy. Interim safety = Flux health-gate (pages on a bad image) +
+  # `make rollback APP=qemu`. Set "false" to make qemu build-only again.
+  DEPLOY_QEMU: "true"
 
 jobs:
   # Gate on Tests success + detect which backend(s) actually changed.
@@ -121,7 +124,8 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
       - name: Deploy — commit image bump to pebble-cluster
-        # qemu stays build-only until the verify+revert net exists (Recreate = downtime risk).
+        # qemu deploys only when DEPLOY_QEMU=true (Recreate = brief-downtime risk;
+        # health-gate + `make rollback` are the safety until autonomous revert lands).
         if: matrix.enabled == 'true' && (matrix.name != 'qemu' || env.DEPLOY_QEMU == 'true')
         env:
           TOKEN: ${{ secrets.CLUSTER_DEPLOY_TOKEN }}
