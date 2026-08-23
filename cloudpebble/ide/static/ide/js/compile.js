@@ -731,6 +731,12 @@ CloudPebble.Compile = (function() {
             });
         }).catch(function(error) {
             if (CloudPebble.CompileReboot.shouldShowPrompt(error, SharedPebble.isVirtual())) {
+                // The progress modal has already been repurposed to show this same
+                // error, and the reboot prompt now says it better. Leaving it open
+                // behind the prompt strands a focus-trapping modal on the page:
+                // once the prompt is dismissed, nothing on the page can be typed
+                // into again -- including the AI chat composer -- until a reload.
+                modal.modal('hide');
                 CloudPebble.CompileReboot.showRebootPrompt(error.message, kind, installBuild, SharedPebble.reboot.bind(SharedPebble), install_on_watch, $('#emulator-reboot-prompt'));
             } else {
                 throw error;

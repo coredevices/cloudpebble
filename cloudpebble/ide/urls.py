@@ -2,6 +2,22 @@ from django.urls import path, re_path
 from django.views.i18n import JavaScriptCatalog
 
 from ide.api import proxy_keen, check_task, get_shortlink, heartbeat
+from ide.api.agent import (
+    agent_app_settings,
+    agent_credentials,
+    agent_emulator,
+    agent_credentials_delete,
+    agent_credentials_save,
+    agent_anthropic_finish,
+    agent_anthropic_start,
+    agent_openrouter_callback,
+    agent_openrouter_start,
+    agent_start,
+    agent_message,
+    agent_stream,
+    agent_cancel,
+    agent_transcript,
+)
 from ide.api.git import github_push, github_pull, set_project_repo, create_project_repo
 from ide.api.sse import project_events
 from ide.api.phone import ping_phone, check_phone, list_phones, update_phone
@@ -256,6 +272,48 @@ urlpatterns = [
         r"^project/(?P<project_id>\d+)/autocomplete/init",
         init_autocomplete,
         name="init_autocomplete",
+    ),
+    re_path(
+        r"^project/(?P<project_id>\d+)/agent/start$", agent_start, name="agent_start"
+    ),
+    re_path(
+        r"^project/(?P<project_id>\d+)/agent/message$",
+        agent_message,
+        name="agent_message",
+    ),
+    re_path(r"^agent/credentials$", agent_credentials, name="agent_credentials"),
+    re_path(r"^agent/anthropic/start$", agent_anthropic_start,
+            name="agent_anthropic_start"),
+    re_path(r"^agent/anthropic/finish$", agent_anthropic_finish,
+            name="agent_anthropic_finish"),
+    re_path(r"^agent/openrouter/start$", agent_openrouter_start,
+            name="agent_openrouter_start"),
+    re_path(r"^agent/openrouter/callback$", agent_openrouter_callback,
+            name="agent_openrouter_callback"),
+    re_path(r"^agent/credentials/save$", agent_credentials_save,
+            name="agent_credentials_save"),
+    re_path(r"^agent/credentials/delete$", agent_credentials_delete,
+            name="agent_credentials_delete"),
+    re_path(
+        r"^project/(?P<project_id>\d+)/agent/emulator$",
+        agent_emulator,
+        name="agent_emulator",
+    ),
+    re_path(
+        r"^project/(?P<project_id>\d+)/agent/app_settings$",
+        agent_app_settings,
+        name="agent_app_settings",
+    ),
+    re_path(
+        r"^project/(?P<project_id>\d+)/agent/stream$", agent_stream, name="agent_stream"
+    ),
+    re_path(
+        r"^project/(?P<project_id>\d+)/agent/cancel$", agent_cancel, name="agent_cancel"
+    ),
+    re_path(
+        r"^agent/transcript/(?P<sdk_session_id>[\w.-]{1,64})$",
+        agent_transcript,
+        name="agent_transcript",
     ),
     re_path(r"emulator/launch", launch_emulator, name="launch_emulator"),
     re_path(r"emulator/config", qemu_config, name="qemu_config"),

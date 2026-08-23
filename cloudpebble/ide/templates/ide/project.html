@@ -49,6 +49,7 @@
 <link rel="stylesheet" href="{% static 'ide/css/ide.css' %}">
 <link rel="stylesheet" href="{% static 'ide/css/ib.css' %}">
 <link rel="stylesheet" href="{% static 'ide/css/codemirror-default.css' %}">
+{% if agent_enabled %}<link rel="stylesheet" href="{% static 'ide/css/agent.css' %}">{% endif %}
 
 {% endblock %}
 
@@ -70,6 +71,73 @@
 </div>
 <div class="project-container">
     <div class="row-fluid">
+        {% if agent_enabled %}
+        <div id="chat-wrapper">
+            <div id="chat-rail" title="{% trans 'Show AI assistant' %}"></div>
+            <div class="chat-header">
+                {% trans 'AI Assistant' %}
+                <span class="chat-header-buttons">
+                    <a href="#" id="chat-model" title="{% trans 'Choose which model builds your watchface' %}"></a>
+                    <a href="#" id="chat-collapse" title="{% trans 'Hide AI assistant' %}">&#9666;</a>
+                </span>
+            </div>
+
+            <div id="chat-settings" style="display: none;">
+                <p class="chat-settings-intro">
+                    {% blocktrans %}Use your own provider to pick the model and spend your own
+                    quota. Without one you get a free shared model.{% endblocktrans %}
+                </p>
+                <label>{% trans 'Provider' %}
+                    <select id="chat-provider">
+                        <option value="">{% trans 'Free shared model' %}</option>
+                        <option value="anthropic">{% trans 'Anthropic (Claude plan or API key)' %}</option>
+                        <option value="openrouter">{% trans 'OpenRouter (any model, incl. OpenAI)' %}</option>
+                    </select>
+                </label>
+                <div class="chat-settings-row" id="chat-kind-row" style="display: none;">
+                    <label>{% trans 'Credential' %}
+                        <select id="chat-secret-kind">
+                            <option value="oauth">{% trans 'Use your Claude Code subscription' %}</option>
+                            <option value="api_key">{% trans 'API key' %}</option>
+                        </select>
+                    </label>
+                </div>
+                <ol class="chat-steps" id="chat-steps" style="display: none;"></ol>
+                <div class="chat-settings-row" id="chat-secret-row" style="display: none;">
+                    <label>{% trans 'Paste it here' %}
+                        <input type="password" id="chat-secret" autocomplete="off"
+                               placeholder="sk-…">
+                    </label>
+                </div>
+                <div class="chat-settings-row" id="chat-model-row" style="display: none;">
+                    <label>{% trans 'Model' %}
+                        <select id="chat-model-select" style="display: none;"></select>
+                        <input type="text" id="chat-model-name" autocomplete="off"
+                               placeholder="claude-opus-5">
+                    </label>
+                    <p class="chat-hint" id="chat-model-hint">
+                        {% blocktrans %}Leave blank for the default. On OpenRouter use the full
+                        string, e.g. <code>openai/gpt-5.2</code>.{% endblocktrans %}
+                    </p>
+                </div>
+                <div class="chat-settings-actions">
+                    <button class="btn btn-primary btn-small" id="chat-settings-save">{% trans 'Save' %}</button>
+                    <a href="#" id="chat-settings-cancel">{% trans 'Cancel' %}</a>
+                </div>
+                <p class="chat-settings-status" id="chat-settings-status"></p>
+            </div>
+
+            <div id="chat-log"></div>
+            <div class="chat-composer">
+                <div id="chat-queue" style="display: none;"></div>
+                <div id="chat-thinking" style="display: none;">{% trans 'Working…' %}</div>
+                <textarea id="chat-input" placeholder="{% trans 'Describe the watchface you want…' %}"></textarea>
+                <button class="btn btn-primary" id="chat-send">{% trans 'Send' %}</button>
+                <button class="btn btn-danger" id="chat-stop" style="display: none;"
+                        title="{% trans 'Stop the agent. Anything already written stays.' %}">{% trans 'Stop' %}</button>
+            </div>
+        </div>
+        {% endif %}
         <div id="sidebar-wrapper">
             <div>
                 <div id="emulator-container">
@@ -704,6 +772,7 @@ window.JSHINT.errors = window.JSHINT.errors || [];
 <script src="{% static 'ide/js/ib/codeparser.js' %}" type="text/javascript"></script>
 <script src="{% static 'ide/js/ib/layer_list.js' %}" type="text/javascript"></script>
 <script src="{% static 'ide/js/emulator.js' %}?v=20260219f" type="text/javascript"></script>
+{% if agent_enabled %}<script src="{% static 'ide/js/agent.js' %}" type="text/javascript"></script>{% endif %}
 <script src="{% static 'html.sortable/dist/html.sortable.min.js' %}" type="text/javascript"></script>
 <script src="{% static 'text-encoding/lib/encoding.js' %}" type="text/javascript"></script>
 <script src="{% static 'noVNC/include/util.js' %}" type="text/javascript"></script>

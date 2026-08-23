@@ -5,3 +5,10 @@ CLAUDE.md
 SECURITYPLAN.md
 .gstack/
 node_modules/
+.DS_Store
+__pycache__/
+# Scratch workspaces from an earlier agent experiment; not part of the Django app.
+cloudpebble/agent/
+
+# Model bench artifacts: screenshots and per-run summaries
+tests/model_bench/results/
