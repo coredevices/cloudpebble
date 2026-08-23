@@ -86,6 +86,7 @@ jobs:
             manifest: flux/apps/cloudpebble/qemu.yaml
             build_args: |
               PEBBLE_SDK_VERSION=${{ github.event.inputs.sdk_version || '4.33.1' }}
+            smoke_env: "-e EMULATOR_FIXED_LIMIT=20"
           - name: ycmd
             enabled: ${{ needs.changes.outputs.ycmd }}
             context: cloudpebble-ycmd-proxy
@@ -94,6 +95,7 @@ jobs:
             build_args: |
               PEBBLE_SDK_VERSION=${{ github.event.inputs.sdk_version || '4.33.1' }}
               NODE_VERSION=16.20.2
+            smoke_env: ""
     steps:
       - name: Skip unchanged service
         if: matrix.enabled != 'true'
@@ -122,6 +124,38 @@ jobs:
           build-args: ${{ matrix.build_args }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      - name: Smoke-test the image (must boot without crashing)
+        # Pre-deploy gate: run the freshly-built image and confirm it stays up.
+        # Catches the realistic bad-image failure a code change introduces — crash
+        # on startup (bad import/dep/binary/SDK fetch). If it crashes, we fail here
+        # and never deploy, so a broken qemu image can't cause its Recreate outage.
+        # ponytail: checks boot-not-crash, not full :80 readiness (the listen port
+        #   is env-driven + SSL-optional, so replicating cluster serving in CI is
+        #   fragile and would risk false-failing). The cluster health-gate +
+        #   autonomous revert still backstop the rarer boots-but-doesn't-serve case;
+        #   upgrade this to a real :80 probe if that ever actually happens.
+        if: matrix.enabled == 'true'
+        env:
+          IMG: ghcr.io/coredevices/${{ matrix.image }}:git-${{ needs.changes.outputs.sha }}
+          SMOKE_ENV: ${{ matrix.smoke_env }}
+        run: |
+          set -euo pipefail
+          docker pull "$IMG"
+          cid=$(docker run -d $SMOKE_ENV "$IMG")
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          echo "booting ${{ matrix.name }} image for 30s to check it doesn't crash…"
+          for i in $(seq 1 15); do
+            sleep 2
+            if [ "$(docker inspect -f '{{.State.Running}}' "$cid" 2>/dev/null || echo false)" != "true" ]; then
+              code=$(docker inspect -f '{{.State.ExitCode}}' "$cid" 2>/dev/null || echo '?')
+              echo "::error::${{ matrix.name }} image crashed on startup (exit $code) — NOT deploying"
+              echo "--- container logs ---"; docker logs "$cid" 2>&1 | tail -60
+              exit 1
+            fi
+          done
+          echo "✓ ${{ matrix.name }} image booted and stayed up 30s"
+          echo "--- last logs (sanity) ---"; docker logs "$cid" 2>&1 | tail -15
 
       - name: Deploy — commit image bump to pebble-cluster
         # qemu deploys only when DEPLOY_QEMU=true (Recreate = brief-downtime risk;
