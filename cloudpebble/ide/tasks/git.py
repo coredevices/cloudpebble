@@ -915,7 +915,14 @@ def do_github_pull(project_id, force=False):
     if changed and project.github_hook_build:
         build = BuildResult.objects.create(project=project)
         publish_event(project_id, 'build_start', build_id=build.id)
-        run_compile(build.id)
+        # Run the build as a separate async task so this task returns as soon
+        # as the pull is complete. The frontend shows the "Pulled successfully"
+        # alert and unlocks controls on the pull_complete SSE event (already
+        # published above); build progress is reported independently via the
+        # build_start/build_complete SSE events. Calling run_compile
+        # synchronously here would block this task until the build finished,
+        # delaying the pull_complete UI feedback by the entire build duration.
+        run_compile.delay(build.id)
 
     return changed
 
@@ -938,7 +945,9 @@ def hooked_commit(project_id, target_commit):
     if project.github_hook_build:
         build = BuildResult.objects.create(project=project)
         publish_event(project_id, 'build_start', build_id=build.id)
-        run_compile(build.id)
+        # Run the build asynchronously so this task returns immediately after
+        # the pull completes. See do_github_pull for the rationale.
+        run_compile.delay(build.id)
         did_something = True
 
     return did_something

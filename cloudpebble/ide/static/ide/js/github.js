@@ -97,7 +97,7 @@ CloudPebble.GitHub = (function() {
                     return;
                 }
                 if(!data.access) {
-                    throw new Error(gettext("You don't have access to that repository."));
+                    throw new Error(gettext("You do not have write access to that repository which is required to create a GitHub hook."));
                 }
             }).catch(function(error) {
                 enable_all();

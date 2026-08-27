@@ -114,7 +114,15 @@ def set_project_repo(request, project_id):
             # Generate a new hook UUID
             project.github_hook_uuid = uuid.uuid4().hex
             # Set it up
-            g_repo.create_hook('web', {'url': settings.GITHUB_HOOK_TEMPLATE % {'project': project.id, 'key': project.github_hook_uuid}, 'content_type': 'form'}, ['push'], True)
+            try:
+                g_repo.create_hook('web', {'url': settings.GITHUB_HOOK_TEMPLATE % {'project': project.id, 'key': project.github_hook_uuid}, 'content_type': 'form'}, ['push'], True)
+            except GithubException:
+                # The user lacks admin access to the repo (e.g. they imported a
+                # public repo with "use as git remote" but don't have push access,
+                # so check_repo_access was never called). Roll back the hook UUID
+                # and return a clean access-denied response instead of a 500.
+                project.github_hook_uuid = None
+                return {'exists': True, 'access': False, 'updated': False, 'branch_exists': True}
         elif not auto_pull:
             if project.github_hook_uuid is not None:
                 try:

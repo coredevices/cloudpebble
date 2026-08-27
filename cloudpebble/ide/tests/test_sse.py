@@ -282,7 +282,7 @@ class TestHookedCommitEvents(TestCase):
         hooked_commit(project.id, 'newsha')
         types = [call[0][1] for call in mock_publish.call_args_list]
         self.assertNotIn('build_start', types)
-        mock_compile.assert_not_called()
+        mock_compile.delay.assert_not_called()
 
 
 class TestDoGithubPullEvents(TestCase):
@@ -318,7 +318,7 @@ class TestDoGithubPullEvents(TestCase):
         do_github_pull(project.id)
         types = [call[0][1] for call in mock_publish.call_args_list]
         self.assertIn('build_start', types)
-        mock_compile.assert_called_once()
+        mock_compile.delay.assert_called_once()
 
     @mock.patch('ide.tasks.git.publish_event')
     @mock.patch('ide.tasks.git.run_compile')
@@ -335,7 +335,7 @@ class TestDoGithubPullEvents(TestCase):
         do_github_pull(project.id)
         types = [call[0][1] for call in mock_publish.call_args_list]
         self.assertNotIn('build_start', types)
-        mock_compile.assert_not_called()
+        mock_compile.delay.assert_not_called()
 
     @mock.patch('ide.tasks.git.publish_event')
     @mock.patch('ide.tasks.git.github_pull')
@@ -368,7 +368,7 @@ class TestDoGithubPullEvents(TestCase):
         do_github_pull(project.id)
         types = [call[0][1] for call in mock_publish.call_args_list]
         self.assertNotIn('build_start', types)
-        mock_compile.assert_not_called()
+        mock_compile.delay.assert_not_called()
 
 
 class TestRunCompileEvents(TestCase):

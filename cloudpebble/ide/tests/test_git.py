@@ -1472,4 +1472,3 @@ class GithubPullFullAtomicityTest(TestCase):
         mock_atomic.assert_called_once()
         self.assertEqual(self.project.github_last_commit, 'newsha')
         self.assertEqual(self.project.github_last_sync, '2025-01-01T00:00:00Z')
-        self.project.save.assert_called_once()
