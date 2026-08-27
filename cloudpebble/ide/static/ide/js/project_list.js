@@ -184,7 +184,7 @@ $(function() {
             return;
         }
         if(branch.length == 0) {
-            branch = 'master';
+            branch = 'main';
         }
         disable_import_controls();
         active_set.find('.progress').removeClass('hide');
