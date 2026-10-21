@@ -94,7 +94,7 @@ jobs:
             manifest: flux/apps/cloudpebble/ycmd.yaml
             build_args: |
               PEBBLE_SDK_VERSION=${{ github.event.inputs.sdk_version || '4.33.1' }}
-              NODE_VERSION=16.20.2
+              NODE_VERSION=24.22.1
             smoke_env: ""
     steps:
       - name: Skip unchanged service

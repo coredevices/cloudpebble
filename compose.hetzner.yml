@@ -36,5 +36,5 @@ services:
       context: cloudpebble-ycmd-proxy/
       args:
         PEBBLE_SDK_VERSION: ${PEBBLE_SDK_VERSION}
-        NODE_VERSION: ${NODE_VERSION_YCMD:-16.20.2}
+        NODE_VERSION: ${NODE_VERSION_YCMD:-24.22.1}
     restart: unless-stopped
