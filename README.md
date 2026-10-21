@@ -20,7 +20,7 @@ All runtime configuration lives in `.env`. Edit it before building:
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `PEBBLE_SDK_VERSION` | `4.9.169` | SDK version installed in all containers (build fails if unset) |
-| `NODE_VERSION_WEB` | `20.11.0` | Node.js version in web/celery images |
+| `NODE_VERSION_WEB` | `24.22.1` | Node.js version in web/celery images |
 | `NODE_VERSION_YCMD` | `24.22.1` | Node.js version in ycmd image |
 | `NGINX_PORT` | `8080` | Host port nginx binds to |
 | `PUBLIC_URL` | `http://localhost:8080` | Public-facing URL (see note below) |

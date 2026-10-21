@@ -20,7 +20,7 @@ services:
       context: cloudpebble/
       args:
         PEBBLE_SDK_VERSION: ${PEBBLE_SDK_VERSION}
-        NODE_VERSION: ${NODE_VERSION_WEB:-20.11.0}
+        NODE_VERSION: ${NODE_VERSION_WEB:-24.22.1}
     env_file:
       - path: .env.local
         required: false
@@ -64,7 +64,7 @@ services:
       context: cloudpebble/
       args:
         PEBBLE_SDK_VERSION: ${PEBBLE_SDK_VERSION}
-        NODE_VERSION: ${NODE_VERSION_WEB:-20.11.0}
+        NODE_VERSION: ${NODE_VERSION_WEB:-24.22.1}
     env_file:
       - path: .env.local
         required: false
