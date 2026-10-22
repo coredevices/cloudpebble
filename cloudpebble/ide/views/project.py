@@ -6,6 +6,7 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.views.decorators.http import require_safe, require_POST
+from ide.api.agent import agent_enabled
 from ide.models.build import BuildResult
 from ide.models.project import Project
 from ide.tasks.git import hooked_commit
@@ -63,7 +64,8 @@ def view_project(request, project_id):
         'phone_shorturl': settings.PHONE_SHORTURL,
         'supported_platforms': project.supported_platforms,
         'regexes': regexes,
-        'regexes_json': json.dumps(regexes.regex_dictionary)
+        'regexes_json': json.dumps(regexes.regex_dictionary),
+        'agent_enabled': agent_enabled(request.user),
     })
 
 

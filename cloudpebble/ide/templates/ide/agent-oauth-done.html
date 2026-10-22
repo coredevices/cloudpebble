@@ -1,0 +1,36 @@
+{% load i18n %}<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>{% if error %}{% trans 'Could not connect' %}{% else %}{% trans 'Connected' %}{% endif %}</title>
+    <style>
+        body { background: #262626; color: #ddd; font-family: sans-serif;
+               display: flex; align-items: center; justify-content: center;
+               height: 100vh; margin: 0; text-align: center; }
+        .box { max-width: 380px; padding: 24px; }
+        h1 { font-size: 18px; margin: 0 0 10px; }
+        p { color: #999; font-size: 13px; line-height: 1.5; margin: 0; }
+        .ok { color: #4caf50; }
+        .fail { color: #e74c3c; }
+    </style>
+</head>
+<body>
+<div class="box">
+    {% if error %}
+        <h1 class="fail">{% trans 'Could not connect' %}</h1>
+        <p>{{ error }}</p>
+    {% else %}
+        <h1 class="ok">{% trans 'OpenRouter connected' %}</h1>
+        <p>{% trans 'Your key is saved. You can close this tab and carry on building.' %}</p>
+    {% endif %}
+</div>
+<script>
+    // The opener refreshes its own state; this tab has done its job.
+    if (window.opener) {
+        try { window.opener.postMessage({source: 'cloudpebble-agent-oauth',
+                                         ok: {% if error %}false{% else %}true{% endif %}}, window.location.origin); } catch (e) {}
+        setTimeout(function() { window.close(); }, {% if error %}4000{% else %}1200{% endif %});
+    }
+</script>
+</body>
+</html>

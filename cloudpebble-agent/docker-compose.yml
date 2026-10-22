@@ -1,0 +1,21 @@
+services:
+  agent:
+    build: .
+    # Bound to all interfaces so the exe.dev HTTPS proxy (which forwards this
+    # VM's port 8000) can reach it: Django runs on a DIFFERENT box, and exe.dev
+    # gates SSH per-account so there is no VM-to-VM tunnel available.
+    #
+    # ponytail: dev-only exposure. The proxy must be `share set-public`, so the
+    # only thing standing in front of /turn is the AGENT_AUTH_HEADER secret.
+    # Before this serves anyone but us, invert the connection: have the agent
+    # box long-poll Django for pending turns (outbound-only, zero inbound
+    # surface) instead of Django calling in. See AGENT_PLAN.md.
+    ports:
+      - "8000:8000"
+    # ~/.agent-env on the deploy target. Compose resolves this relative to the
+    # compose file, which deploy_agent.sh puts at ~/cloudpebble-agent/.
+    # Compose does not expand ~, so this must stay a relative path.
+    env_file:
+      - ../.agent-env
+    mem_limit: 4g
+    restart: unless-stopped

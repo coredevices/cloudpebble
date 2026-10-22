@@ -1,0 +1,392 @@
+/* AI agent chat panel — the third column. Sits left of the sidebar. */
+
+#chat-wrapper {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 360px;
+    background-color: #232323;
+    border-right: 1px solid #111;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 2;
+}
+
+/* Shift the existing two columns over to make room. */
+body.with-chat #sidebar,
+body.with-chat #emulator-container { left: 360px; }
+body.with-chat #pane-parent { left: 645px; }
+
+body.with-chat.chat-collapsed #sidebar,
+body.with-chat.chat-collapsed #emulator-container { left: 28px; }
+body.with-chat.chat-collapsed #pane-parent { left: 313px; }
+body.with-chat.chat-collapsed #chat-wrapper { width: 28px; }
+body.with-chat.chat-collapsed #chat-wrapper > *:not(#chat-rail) { display: none; }
+
+#chat-rail {
+    display: none;
+    flex: 1;
+    cursor: pointer;
+    color: #777;
+    text-align: center;
+    padding-top: 10px;
+}
+#chat-rail:hover { color: #fff; }
+#chat-rail:after { content: '\25B8'; }
+body.with-chat.chat-collapsed #chat-rail { display: block; }
+
+.chat-header {
+    flex: 0 0 auto;
+    padding: 8px 10px;
+    background-color: #292929;
+    border-bottom: 1px solid #111;
+    color: #ccc;
+    font-family: PFD-Regular, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    text-transform: uppercase;
+    font-size: 13px;
+    line-height: 20px;
+}
+
+.chat-header .chat-header-buttons {
+    float: right;
+}
+
+.chat-header a {
+    color: #999;
+    text-decoration: none;
+    margin-left: 8px;
+}
+
+.chat-header a:hover { color: #fff; }
+
+#chat-log {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 10px;
+    color: #ddd;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.chat-msg {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    padding: 7px 10px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.chat-msg-user {
+    background-color: #3a4a5a;
+    color: #fff;
+    margin-left: 30px;
+}
+
+.chat-msg-assistant {
+    background-color: #2d2d2d;
+}
+
+.chat-msg-system {
+    color: #999;
+    font-style: italic;
+}
+
+/* Cards: tool calls, tool results, file edits. */
+
+.chat-card {
+    background-color: #2a2a2a;
+    border: 1px solid #1c1c1c;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    font-size: 12px;
+}
+
+.chat-card-header {
+    padding: 5px 8px;
+    cursor: pointer;
+    color: #bbb;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chat-card-header a { color: #7ab8e8; }
+
+.chat-caret {
+    display: inline-block;
+    width: 10px;
+    color: #777;
+}
+
+.chat-tool-name {
+    font-family: Menlo, Monaco, Consolas, monospace;
+    color: #d0d0d0;
+}
+
+.chat-summary {
+    color: #8a8a8a;
+    margin-left: 6px;
+}
+
+.chat-status { margin-right: 6px; }
+.chat-ok { color: #6ab04c; }
+.chat-fail { color: #d9534f; }
+
+.chat-card-body {
+    border-top: 1px solid #1c1c1c;
+    max-height: 320px;
+    overflow: auto;
+}
+
+.chat-card-body pre,
+.chat-card pre {
+    margin: 0;
+    padding: 6px 8px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    color: #c8c8c8;
+    font-size: 11px;
+    line-height: 1.35;
+    white-space: pre;
+}
+
+.chat-diff div { white-space: pre; }
+.chat-diff-add { color: #8fce6b; }
+.chat-diff-del { color: #e08080; }
+.chat-diff-hunk { color: #7a9fc0; }
+
+.chat-shot {
+    display: block;
+    margin: 6px auto;
+    image-rendering: pixelated;
+    background-color: #000;
+    max-width: 100%;
+}
+
+/* Build status chip. */
+
+.chat-chip {
+    display: inline-block;
+    padding: 3px 9px;
+    margin-bottom: 8px;
+    border-radius: 10px;
+    background-color: #3a3a3a;
+    font-size: 12px;
+}
+
+.chat-chip a { color: #ddd; text-decoration: none; }
+.chat-build-succeeded { background-color: #2f5d2a; }
+.chat-build-failed { background-color: #6b2f2c; }
+/* The build ran but we could not confirm the outcome — not the same as failed. */
+.chat-build-unknown { background-color: #5a4a22; }
+
+.chat-error {
+    background-color: #4a2320;
+    border: 1px solid #6b2f2c;
+    color: #f0c8c4;
+    padding: 7px 10px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    font-size: 12px;
+}
+
+.chat-error a { color: #ffb3ac; }
+
+#chat-thinking {
+    color: #888;
+    font-size: 12px;
+    font-style: italic;
+    margin-bottom: 8px;
+}
+
+/* Composer. */
+
+.chat-composer {
+    flex: 0 0 auto;
+    padding: 8px;
+    background-color: #292929;
+    border-top: 1px solid #111;
+}
+
+#chat-input {
+    width: 100%;
+    box-sizing: border-box;
+    resize: none;
+    height: 58px;
+    margin-bottom: 6px;
+    background-color: #1e1e1e;
+    border: 1px solid #111;
+    color: #eee;
+    font-size: 13px;
+    padding: 6px;
+}
+
+#chat-input:focus {
+    border-color: #444;
+    outline: none;
+    box-shadow: none;
+}
+
+.chat-composer .btn { float: right; }
+.chat-composer:after { content: ''; display: block; clear: both; }
+
+/* Turn progress: spinner, current activity, elapsed time. Turns run 40s to
+   several minutes, so a static label reads as a hang. */
+#chat-thinking {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: #999;
+}
+#chat-thinking .chat-spinner {
+    color: #ff4700;
+    font-size: 13px;
+    line-height: 1;
+}
+#chat-thinking .chat-thinking-what { flex: 1; }
+#chat-thinking .chat-thinking-time {
+    font-variant-numeric: tabular-nums;
+    color: #777;
+}
+
+/* Model settings: which provider builds your watchface, and on whose quota. */
+#chat-model {
+    font-size: 11px;
+    color: #999;
+    margin-right: 10px;
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+    vertical-align: bottom;
+}
+#chat-model:hover { color: #ff4700; }
+#chat-settings {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    font-size: 12px;
+}
+#chat-settings .chat-settings-intro { color: #999; margin: 0 0 12px; }
+#chat-settings label { display: block; color: #bbb; margin-bottom: 4px; }
+#chat-settings select,
+#chat-settings input[type=text],
+#chat-settings input[type=password] {
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 3px;
+}
+#chat-settings .chat-settings-row { margin-top: 10px; }
+#chat-settings .chat-hint { color: #777; font-size: 11px; margin: 4px 0 0; }
+#chat-settings .chat-hint code { font-size: 11px; }
+#chat-settings .chat-settings-actions { margin-top: 14px; }
+#chat-settings .chat-settings-actions a { margin-left: 10px; color: #999; }
+#chat-settings .chat-settings-status { color: #999; margin-top: 10px; min-height: 1em; }
+/* A credential that stopped working: the user has to act, so make it visible. */
+#chat-model.chat-model-broken { color: #e74c3c; }
+#chat-model.chat-model-broken:before { content: '⚠ '; }
+
+/* Guided setup: getting a key is the step people get stuck on. */
+#chat-settings .chat-steps {
+    margin: 12px 0 0 16px;
+    padding: 0;
+    color: #bbb;
+    line-height: 1.5;
+}
+#chat-settings .chat-steps li { margin-bottom: 7px; }
+#chat-settings .chat-steps a { color: #ff8a5c; }
+#chat-settings .chat-command { margin-top: 4px; }
+#chat-settings .chat-copy {
+    display: inline-block;
+    background: #1b1b1b;
+    border: 1px solid #3a3a3a;
+    border-radius: 3px;
+    padding: 3px 7px;
+    font-size: 11px;
+    color: #e0e0e0;
+    cursor: pointer;
+    user-select: all;
+}
+#chat-settings .chat-copy:hover { border-color: #ff4700; }
+#chat-settings .chat-connect { margin-top: 4px; }
+
+/* Messages waiting for the current turn to finish. Deliberately quieter than a
+   sent message: they have not happened yet. */
+#chat-queue {
+    margin-bottom: 6px;
+}
+
+.chat-queued {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 4px 8px;
+    margin-bottom: 4px;
+    border-left: 2px solid #4a4a4a;
+    background-color: #262626;
+    color: #9a9a9a;
+    font-size: 12px;
+}
+
+.chat-queued-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chat-queued-drop {
+    color: #8a8a8a;
+    text-decoration: none;
+    /* A comfortable tap target on a phone without making the row taller. */
+    padding: 0 4px;
+}
+
+.chat-queued-drop:hover { color: #d9534f; text-decoration: none; }
+
+/* One-click recovery for the failures the agent cannot fix itself: the emulator
+   belongs to this browser tab, not to the agent. */
+.chat-card-action {
+    padding: 6px 8px;
+    border-top: 1px solid #1c1c1c;
+}
+
+.chat-emulator-open {
+    width: 100%;
+}
+
+/* What an empty panel says. Removed as soon as any real message arrives -- it is
+   guidance, not part of the transcript. */
+.chat-intro {
+    color: #8a8a8a;
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 4px 2px;
+}
+
+.chat-intro p { margin: 0 0 8px; }
+
+.chat-intro-label { color: #6f6f6f; }
+
+a.chat-example {
+    display: block;
+    padding: 6px 8px;
+    margin-bottom: 4px;
+    border: 1px solid #2e2e2e;
+    border-radius: 4px;
+    color: #9fc4e0;
+    text-decoration: none;
+}
+
+a.chat-example:hover {
+    border-color: #3d5567;
+    background-color: #262626;
+    text-decoration: none;
+}
