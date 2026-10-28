@@ -25,7 +25,13 @@ CloudPebble.Compile = (function() {
         tr.append($('<td class="build-id">' + (build.id === null ? '?' : build.id) + '</td>'));
         tr.append($('<td class="build-date">' + CloudPebble.Utils.FormatDatetime(build.started) + '</td>'));
         tr.append($('<td class="build-state">' + COMPILE_SUCCESS_STATES[build.state].english + '</td>'));
-        tr.append($('<td class="build-commit">').attr('title', build.commit || '').text(format_commit(build.commit)));
+        var commit_td = $('<td class="build-commit">').attr('title', build.commit || '');
+        if (build.commit_url) {
+            commit_td.append($('<a target="_blank" rel="noopener">').attr('href', build.commit_url).text(format_commit(build.commit)));
+        } else {
+            commit_td.text(format_commit(build.commit));
+        }
+        tr.append(commit_td);
         var pbw_badge = $('<td class="build-pbw">').appendTo(tr);
         if (build.state == 3) {
             pbw_badge.append($('<a class="btn btn-small">')
@@ -342,8 +348,13 @@ CloudPebble.Compile = (function() {
         } else {
             pane.find('#last-compilation, .build-stats').removeClass('hide');
             pane.find('#last-compilation-started').text(CloudPebble.Utils.FormatDatetime(build.started));
-            pane.find('#last-compilation-commit').toggleClass('hide', !build.commit)
-                .find('span').attr('title', build.commit || '').text(format_commit(build.commit));
+            var commit_link = pane.find('#last-compilation-commit').toggleClass('hide', !build.commit).find('a');
+            commit_link.attr('title', build.commit || '').text(format_commit(build.commit));
+            if (build.commit_url) {
+                commit_link.attr('href', build.commit_url);
+            } else {
+                commit_link.removeAttr('href');
+            }
             if(build.state > 1) {
                 pane.find('#last-compilation-time').removeClass('hide').find('span').text(CloudPebble.Utils.FormatInterval(build.started, build.finished));
                 pane.find('#last-compilation-log').removeClass('hide').attr('href', build.log).off('click').click(function(e) {

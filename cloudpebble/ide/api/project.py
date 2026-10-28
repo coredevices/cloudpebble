@@ -483,13 +483,19 @@ def _serialize_build(build, project):
     else:
         download = build.package_url if project.project_type == 'package' else build.pbw_url
         log = build.build_log_url
+    commit = build.commit_sha
+    commit_url = None
+    if commit and project.github_repo:
+        sha = commit[:-6] if commit.endswith('-dirty') else commit
+        commit_url = 'https://github.com/%s/commit/%s' % (project.github_repo, sha)
     return {
         'uuid': build.uuid,
         'state': build.state,
         'started': str(build.started),
         'finished': str(build.finished) if build.finished else None,
         'id': build.id,
-        'commit': build.commit_sha,
+        'commit': commit,
+        'commit_url': commit_url,
         'download': download,
         'log': log,
         'build_dir': build.get_url(),
