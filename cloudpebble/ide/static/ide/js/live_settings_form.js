@@ -43,6 +43,7 @@ function make_live_settings_form(options) {
 
     // The start_progress/finish_progress logic allows forms to add a progress bar/spinner/etc which appears
     // if saving is taking a while.
+    var revision = 0;
     var saving = false;
     var next_save = null;
     var did_start_progress = false;
@@ -83,8 +84,8 @@ function make_live_settings_form(options) {
     function save(element, event) {
         // After the form is saved, flash the 'tick' icon on success or keep a 'changed' icon on error.
         function on_save_error(error) {
-            opts.error_function(error);
             if (element) show_changed_icon(element);
+            opts.error_function(error);
         }
 
         // If a save is already in progress, queue up another one.
@@ -95,6 +96,7 @@ function make_live_settings_form(options) {
             return;
         }
 
+        var savedRevision = revision;
         // The save function itself may throw an error before doing anything asynchronous. In this case we need to catch it.
         try {
             var save_result = Promise.resolve(opts.save_function(event));
@@ -112,6 +114,7 @@ function make_live_settings_form(options) {
             // Allow save functions to declare that the form is incomplete. Used in KV-Tables to enforce filling in whole rows.
             if (result && result.incomplete) return;
 
+            if (savedRevision !== revision) return;
             clear_changed_icons();
             if (element) flash_tick_icon(element);
             if (_.isFunction(opts.on_save)) {
@@ -119,7 +122,7 @@ function make_live_settings_form(options) {
             }
         }).catch(function (error) {
             on_save_error(error);
-            throw error;
+            // The error is displayed by the form; event handlers do not consume promises.
         }).finally(function() {
             saving = false;
             if (next_save) {
@@ -209,6 +212,7 @@ function make_live_settings_form(options) {
 
         // Set up the save-on-change hook
         opts.form.on("change", opts.control_selector, function(e) {
+            revision++;
             show_changed_icon($(this));
             if (_.isFunction(opts.on_change)) {
                 opts.on_change(this);
@@ -218,6 +222,7 @@ function make_live_settings_form(options) {
 
         // While typing in text forms, show the changed icon
         opts.form.on('input', opts.changeable_control_selector, function() {
+            revision++;
             show_changed_icon($(this));
         });
 
@@ -235,7 +240,7 @@ function make_live_settings_form(options) {
             init();
         },
         save: function(element) {
-            save(element);
+            return save(element);
         }
     };
 }
