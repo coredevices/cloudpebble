@@ -2,16 +2,18 @@ FROM python:3.11-slim-trixie
 LABEL maintainer="CloudPebble Contributors"
 
 ARG PEBBLE_SDK_VERSION
+ARG TARGETARCH
 ARG NODE_VERSION=24.22.1
 ENV NPM_CONFIG_LOGLEVEL=info NODE_VERSION=${NODE_VERSION} DJANGO_VERSION=4.2 NODEJS_CHECK_SIGNATURES=no
 
 # Node stuff.
-RUN apt-get update && apt-get install -y curl && \
-  curl -SLO "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.gz" && \
+RUN NODE_ARCH=$(case "$TARGETARCH" in arm64) echo arm64;; *) echo x64;; esac) && \
+  apt-get update && apt-get install -y curl && \
+  curl -SLO "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-$NODE_ARCH.tar.gz" && \
   curl -SLO "https://nodejs.org/dist/v$NODE_VERSION/SHASUMS256.txt.asc" && \
-  grep " node-v$NODE_VERSION-linux-x64.tar.gz\$" SHASUMS256.txt.asc | sha256sum -c - && \
-  tar -xzf "node-v$NODE_VERSION-linux-x64.tar.gz" -C /usr/local --strip-components=1 && \
-  rm "node-v$NODE_VERSION-linux-x64.tar.gz" SHASUMS256.txt.asc
+  grep " node-v$NODE_VERSION-linux-$NODE_ARCH.tar.gz\$" SHASUMS256.txt.asc | sha256sum -c - && \
+  tar -xzf "node-v$NODE_VERSION-linux-$NODE_ARCH.tar.gz" -C /usr/local --strip-components=1 && \
+  rm "node-v$NODE_VERSION-linux-$NODE_ARCH.tar.gz" SHASUMS256.txt.asc
 
 RUN npm install -g jshint@2.13.6 typescript@3.9.10
 
@@ -39,7 +41,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
 
 # Install pebble-tool via uv
-RUN uv tool install pebble-tool --python 3.11
+RUN uv tool install "pebble-tool>=5.1.0" --python 3.11
 
 # Ensure pebble is in PATH
 ENV PATH="/root/.local/share/uv/tools/pebble-tool/bin:$PATH"
@@ -76,7 +78,7 @@ RUN pebble sdk install $PEBBLE_SDK_VERSION
 RUN pebble sdk activate $PEBBLE_SDK_VERSION
 
 # Set up SDK paths for CloudPebble
-ENV PEBBLE_SDK_PATH=/root/.pebble-sdk
+ENV PEBBLE_SDK_PATH=/root/.local/share/pebble-sdk
 ENV PATH="${PEBBLE_SDK_PATH}/SDKs/current/toolchain/arm-none-eabi/bin:$PATH"
 
 ADD requirements.txt /tmp/requirements.txt

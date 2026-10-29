@@ -64,6 +64,7 @@ ENV PATH="/root/.local/bin:$PATH"
 # stpyv8 (transitive dep) has a broken PEP 517 sdist (setup.py does
 # `from settings import *` against a local sibling that isn't on sys.path in
 # an isolated build). Force uv to use the prebuilt manylinux wheel instead.
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev && rm -rf /var/lib/apt/lists/*
 RUN uv pip install --system --only-binary=stpyv8 git+https://github.com/coredevices/pypkjs.git
 
 # pypkjs relies on requests/urllib3 internals that changed in urllib3 2.x.

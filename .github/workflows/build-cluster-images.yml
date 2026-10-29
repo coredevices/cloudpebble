@@ -23,7 +23,7 @@ on:
     inputs:
       sdk_version:
         description: "Pebble SDK version"
-        default: "4.33.1"
+        default: "4.43"
   # Deploy only AFTER the Tests workflow passes on main.
   workflow_run:
     workflows: ["Tests"]
@@ -35,7 +35,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SDK_VERSION: ${{ github.event.inputs.sdk_version || '4.33.1' }}
+  SDK_VERSION: ${{ github.event.inputs.sdk_version || '4.43' }}
   # qemu auto-deploy. Interim safety = Flux health-gate (pages on a bad image) +
   # `make rollback APP=qemu`. Set "false" to make qemu build-only again.
   DEPLOY_QEMU: "true"
@@ -85,7 +85,7 @@ jobs:
             image: cloudpebble-qemu
             manifest: flux/apps/cloudpebble/qemu.yaml
             build_args: |
-              PEBBLE_SDK_VERSION=${{ github.event.inputs.sdk_version || '4.33.1' }}
+              PEBBLE_SDK_VERSION=${{ github.event.inputs.sdk_version || '4.43' }}
             smoke_env: "-e EMULATOR_FIXED_LIMIT=20"
           - name: ycmd
             enabled: ${{ needs.changes.outputs.ycmd }}
@@ -93,7 +93,7 @@ jobs:
             image: cloudpebble-ycmd
             manifest: flux/apps/cloudpebble/ycmd.yaml
             build_args: |
-              PEBBLE_SDK_VERSION=${{ github.event.inputs.sdk_version || '4.33.1' }}
+              PEBBLE_SDK_VERSION=${{ github.event.inputs.sdk_version || '4.43' }}
               NODE_VERSION=24.22.1
             smoke_env: ""
     steps:
