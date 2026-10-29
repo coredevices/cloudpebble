@@ -118,7 +118,7 @@ CloudPebble.Sidebar = (function() {
                 current_container = existing.find('> ul.sidebar-folder-contents');
             } else {
                 var folder_header = $('<a href="#" class="sidebar-folder-toggle">')
-                    .html('<span class="sidebar-folder-arrow">&#9662;</span> ' + part + '/');
+                    .append($('<span class="sidebar-folder-arrow">').text('▾'), document.createTextNode(' ' + part + '/'));
                 var folder_contents = $('<ul class="nav-list sidebar-folder-contents">');
                 var folder_li = $('<li class="sidebar-folder">')
                     .attr('data-folder-id', folder_id)
@@ -166,6 +166,7 @@ CloudPebble.Sidebar = (function() {
 
     function create_initial_sections(type) {
         var default_sections_for_project_types = {
+            plugin: ['plugin', 'config'],
             native: ['app', 'pkjs'],
             pebblejs: ['app'],
             simplyjs: ['app'],

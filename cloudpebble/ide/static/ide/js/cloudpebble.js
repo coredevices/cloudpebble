@@ -22,8 +22,8 @@ CloudPebble.ProgressBar = (function() {
 /** Define calculated properties based on the project type. */
 CloudPebble.ProjectProperties = (function() {
     var spec = {
-        'js_only': ['simplyjs', 'pebblejs', 'rocky'],
-        'is_runnable': ['native', 'pebblejs', 'simplyjs', 'rocky', 'alloy'],
+        'js_only': ['simplyjs', 'pebblejs', 'rocky', 'plugin'],
+        'is_runnable': ['native', 'pebblejs', 'simplyjs', 'rocky', 'alloy', 'plugin'],
         'supports_message_keys': ['native', 'package', 'alloy'],
         'supports_aplite': ['native', 'package', 'simplyjs', 'pebblejs']
     };
@@ -45,7 +45,9 @@ CloudPebble.TargetNames =   {
     'pkjs': gettext("PebbleKit JS"),
     'worker': gettext("Worker source"),
     'common': gettext("Shared JavaScript"),
-    'embeddedjs': gettext("Embedded JS")
+    'embeddedjs': gettext("Embedded JS"),
+    'plugin': gettext("Plugin JavaScript"),
+    'config': gettext("Configuration files")
 };
 
 CloudPebble.ProjectInfo = {};
@@ -64,6 +66,7 @@ function pickDefaultSourceFile(sourceFiles) {
     }
 
     return (
+        match('plugin.js', 'plugin') ||
         match('main.c', 'app') ||
         match('main.c', null) ||
         match('main.js', 'embeddedjs') ||
@@ -123,7 +126,7 @@ CloudPebble.Init = function() {
         CloudPebble.Emulator.init();
         CloudPebble.YCM.initialise();
         // Init TypeScript completions for JS project types (alloy, rocky, pebblejs)
-        if (CloudPebble.ProjectProperties.js_only || data.type === 'alloy') {
+        if (CloudPebble.ProjectProperties.js_only || data.type === 'alloy' || data.type === 'native') {
             CloudPebble.TSCompletions.init(TS_TYPINGS_URL);
         }
         CloudPebble.Sidebar.SetProjectType(data.type);

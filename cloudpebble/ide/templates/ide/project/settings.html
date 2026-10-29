@@ -2,6 +2,7 @@
 <!-- Settings template -->
 <div id="settings-pane-template" class="hide settings-pane">
     <div class="well alert alert-error hide fixed-well"></div>
+    <div id="settings-save-status" role="status" aria-live="polite" class="help-block">{% trans 'Changes save automatically' %}</div>
     <form class="form-horizontal">
         <div class="well">
             <div class="control-group">
@@ -17,6 +18,23 @@
                 </div>
             </div>
         </div>
+        {% if project.project_type != 'package' %}
+        <div class="well permissions-settings">
+            <div class="tool-heading"><h3>{% trans 'Permissions & phone features' %}</h3><span class="feature-badge">SDK 4.43</span></div>
+            <p>{% trans 'All apps use the new permission system automatically. Choose what your app needs; users approve access in the Pebble phone app.' %}</p>
+            <div class="control-group field-configuration"><label class="control-label" for="settings-config-page">{% trans 'Configuration page' %}</label><div class="controls">
+                <input type="text" id="settings-config-page" placeholder="config.html or https://…" class="input-xxlarge"><span class="help-block">{% trans 'A bundled HTML file or a hosted page. Leave empty for the legacy configuration flow.' %}</span>
+            </div></div>
+            <div class="control-group field-permissions">
+                <label class="control-label">{% trans 'App permissions' %}</label>
+                <div id="settings-permission-editor"></div>
+                <input type="hidden" id="settings-permissions-changed">
+            </div>
+            <div class="control-group field-plugin"><label class="control-label" for="settings-plugin">{% trans 'Plugin (JSON)' %}</label><div class="controls">
+                <textarea id="settings-plugin" rows="10" class="input-xxlarge" spellcheck="false"></textarea><span class="help-block">{% trans 'Declare script, sources and actions. Use {} for an app without a plugin.' %} <a href="https://developer.repebble.com/guides/plugins/preview/" target="_blank" rel="noopener">{% trans 'Plugin guide' %}</a></span>
+            </div></div>
+        </div>
+        {% endif %}
         <div class="well">
             <div class="control-group supports-aplite not-alloy-platform">
                 {# Translators: "Aplite" is a platform name and should be left untranslated. #}
@@ -273,6 +291,8 @@
             <button type="button" id="project-export-zip" class="btn">{% trans "Download as zip" %}</button>
             <button type="button" id="project-delete" class="btn btn-danger">{% trans "Delete Project" %}</button>
         </div>
+
+
     </form>
 </div>
 
@@ -293,6 +313,7 @@
                 </div>
             </div>
         </div>
+
     </form>
     <div class="modal-footer">
         <button class="btn" data-dismiss="modal">{% trans 'Cancel' %}</button>

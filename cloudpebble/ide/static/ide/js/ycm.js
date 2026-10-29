@@ -142,6 +142,7 @@ CloudPebble.YCM = new (function() {
     }
 
     this.initialise = function() {
+        if (CloudPebble.ProjectInfo.type === "plugin") { $(".prepare-autocomplete").hide(); return Promise.resolve(); }
         if(mInitialised || mIsInitialising || mFailed) {
             return mInitPromise;
         }

@@ -204,6 +204,10 @@ CloudPebble.Editor = (function() {
                 file_kind = 'json';
                 file_mode = 'application/json';
             }
+            else if (/\.(html|css|svg)$/.test(file.name)) {
+                file_kind = 'text';
+                file_mode = /\.css$/.test(file.name) ? 'text/css' : 'text/html';
+            }
             else {
                 file_kind = 'c';
                 file_mode = CloudPebble.Editor.PebbleMode;
@@ -1080,7 +1084,7 @@ CloudPebble.Editor = (function() {
         function get_js_target(selector) {
             var target = !!selector ? prompt.find(selector + ':visible').val() : null;
             if (!target) {
-                target = _.contains(['native', 'package', 'alloy'], CloudPebble.ProjectInfo.type) ? 'pkjs': 'app';
+                target = CloudPebble.ProjectInfo.type === 'plugin' ? 'plugin' : (_.contains(['native', 'package', 'alloy'], CloudPebble.ProjectInfo.type) ? 'pkjs': 'app');
             }
             return target;
         }
@@ -1100,7 +1104,7 @@ CloudPebble.Editor = (function() {
         if(CloudPebble.ProjectProperties.js_only) {
             file_type_picker.val('js').change();
             file_type_picker.find('option').filter(function() {
-                return !(this.value == 'js' || this.value == 'json' || this.value == 'rocky');
+                return !(this.value == 'js' || this.value == 'json' || this.value == 'rocky' || this.value == 'plugin' || this.value == 'config');
             }).remove();
         } else if(CloudPebble.ProjectInfo.type == 'alloy') {
             file_type_picker.find('option[value=layout]').remove();
@@ -1164,6 +1168,11 @@ CloudPebble.Editor = (function() {
                         files = [{name: name, target: target}]
                     }
                 })();
+            } else if(kind == 'plugin' || kind == 'config') {
+                var bundleName = prompt.find('#new-' + kind + '-file-name').val().trim();
+                var valid = kind === 'plugin' ? /\.(js|json)$/.test(bundleName) : /\.(html|css|svg)$/.test(bundleName);
+                if (!valid) error.text(gettext('Choose a supported file extension.')).show();
+                else files = [{name: bundleName, target: kind}];
             } else if(kind == 'embeddedjs') {
                 (function() {
                     var name = prompt.find('#new-embeddedjs-file-name').val();
