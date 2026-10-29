@@ -164,7 +164,9 @@ Pebble = function(proxy, token, authMode) {
 
     var handle_socket_message = function(data) {
         var origin = data[0];
-        if(origin == 5) {
+        if(origin === 0x0d || origin === 0x0f) {
+            self.trigger('simulator:reply:' + origin, data);
+        } else if(origin == 5) {
             var result = unpack("I", data.subarray(1, 5));
             console.log("Received status update: ", result);
             mIsInstalling = false;
@@ -487,6 +489,53 @@ Pebble = function(proxy, token, authMode) {
         }
         var data = new Uint8Array([0x0a, 0x01]);
         mSocket.send(data);
+    };
+
+    var simulatorPending = {};
+    this.simulator_command = function(command, payload) {
+        return new Promise(function(resolve, reject) {
+            if (simulatorPending[command]) {
+                reject(new Error('A simulator request is already pending. Try again when it finishes.'));
+                return;
+            }
+            simulatorPending[command] = true;
+            var event = 'simulator:reply:' + command;
+            function reply(data) {
+                delete simulatorPending[command];
+                clearTimeout(timer);
+                var text = new TextDecoder('utf-8').decode(data.subarray(2));
+                if (data[1] !== 0) reject(new Error(text));
+                else {
+                    try { resolve(text ? JSON.parse(text) : null); }
+                    catch (error) { reject(error); }
+                }
+            }
+            var timer = setTimeout(function() {
+                delete simulatorPending[command];
+                self.off(event, reply);
+                reject(new Error('The simulator did not respond. Reconnect and try again.'));
+            }, 10000);
+            self.once(event, reply);
+            var body = typeof payload === 'string' ? payload : JSON.stringify(payload);
+            var bytes = new TextEncoder().encode(body);
+            var packet = new Uint8Array(bytes.length + 1);
+            packet[0] = command;
+            packet.set(bytes, 1);
+            try { mSocket.send(packet); }
+            catch (error) {
+                clearTimeout(timer);
+                delete simulatorPending[command];
+                self.off(event, reply);
+                reject(error);
+            }
+        });
+    };
+
+    this.emu_microphone = function(pcm) {
+        var packet = new Uint8Array(pcm.byteLength + 2);
+        packet.set([0x0b, 14]);
+        packet.set(new Uint8Array(pcm), 2);
+        mSocket.send(packet);
     };
 
     this.emu_set_battery_state = function(percent, charging) {

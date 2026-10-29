@@ -4,7 +4,7 @@
     <div id="last-compilation" class="hide">
         <div class="hide well" id="run-on-phone">
             <form class="form-horizontal">
-                <h3>{% trans "Run On" %}</h3>
+                <h3>{% trans "Run your app" %}</h3>
                 <ul class="nav nav-tabs" id="run-target-tabs">
                     <li class="active"><a href="#run-qemu" data-toggle="tab" data-run-target="qemu">{% trans "Emulator" %}</a></li>
                     <li><a href="#run-device" data-toggle="tab" data-run-target="device">{% trans "Phone" %}</a></li>
@@ -76,6 +76,27 @@
                             </div>
                         </div>
                         <hr>
+                        <section class="simulator-tools">
+                            {% if project.project_type != 'plugin' %}
+                            <div class="tool-heading"><h4>{% trans 'Microphone' %}</h4><span class="feature-badge">Emery · Flint · Gabbro</span></div>
+                            <p class="tool-description">{% trans 'Supply audio to your watchapp and test how it handles permission changes.' %}</p>
+                            <div class="tool-row"><span class="tool-label">{% trans 'Permission' %}</span><div class="tool-actions">
+                                <button type="button" class="btn" data-mic-action="grant">{% trans 'Allow' %}</button>
+                                <button type="button" class="btn" data-mic-action="deny">{% trans 'Deny' %}</button>
+                                <button type="button" class="btn" data-mic-action="status">{% trans 'Check status' %}</button>
+                            </div></div>
+                            <div class="tool-row"><span class="tool-label">{% trans 'Audio input' %}</span><div class="tool-actions">
+                                <button type="button" class="btn" data-mic-action="tone">{% trans 'Test tone' %}</button>
+                                <button type="button" class="btn" data-mic-action="live">{% trans 'Browser microphone' %}</button>
+                                <button type="button" class="btn" data-mic-action="stop">{% trans 'Stop' %}</button>
+                            </div></div>
+                            <p class="mic-status" role="status" aria-live="polite">{% trans 'Microphone input is off.' %}</p>
+                            {% endif %}
+                            <div class="tool-row plugin-tool-row"><div><h4>{% trans 'Phone plugins' %}</h4><p class="tool-description">{% trans 'Inspect available sources and actions.' %}</p></div>
+                                <button type="button" class="btn" data-mic-action="plugins">{% trans 'List plugins' %}</button>
+                            </div>
+                            <pre class="plugin-list hide"></pre>
+                        </section>
                         <div class="compilation-buttons two-buttons">
                             <button class="btn" id="show-qemu-logs-btn">{% trans 'View app logs' %}</button>
                             <button class="btn" id="screenshot-qemu-btn">{% trans 'Screenshot' %}</button>
