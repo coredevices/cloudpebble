@@ -50,6 +50,7 @@ gunicorn==21.2.0
 whitenoise==6.6.0
 
 # SDK requirements
+pyelftools==0.32
 freetype-py==2.4.0
 sh==2.0.6
 pypng==0.20220715.0

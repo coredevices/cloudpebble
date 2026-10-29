@@ -1,6 +1,9 @@
 import subprocess
 import re
 
+from elftools.elf.elffile import ELFFile
+from elftools.dwarf.descriptions import describe_form_class
+
 from . import ARM_CS_TOOLS
 
 class LineReader(object):
@@ -18,11 +21,14 @@ class LineReader(object):
         # decimal integer and a hex integer is location information.
 
         lines = [
-            {'file': x.group(1), 'line': int(x.group(2)), 'address': int(x.group(3), 16)}
+            {'file': x.group(1).strip(), 'line': int(x.group(2)), 'address': int(x.group(3), 16)}
             for x in re.finditer(r"(.*\.c)\s+(\d+)\s+(0x[0-9a-f]+)", decoded, re.MULTILINE)
         ]
 
-        files = [x.group(1) for x in re.finditer(r"^CU: (?:.*/)?(.*?\.c):$", decoded, re.MULTILINE)]
+        # New binutils prints "main.c:" instead of "CU: .../main.c:".
+        # Derive the file table from the rows we actually reference so both
+        # formats (and inlined source files) produce valid indices.
+        files = list(dict.fromkeys(line['file'] for line in lines))
 
         return files, lines
 
@@ -64,39 +70,32 @@ class FunctionReader(object):
     def __init__(self, elf_path):
         self.elf = elf_path
 
-    def _exec_tool(self):
-        output = subprocess.check_output([ARM_CS_TOOLS + "arm-none-eabi-objdump", "--dwarf=info", self.elf])
-        return output.decode('utf-8', errors='replace')
-
-    def _decode_info_fields(self, content):
-        """
-        Takes a string of newline separated output of a single segment
-        from objdump --dwarf=info and returns a dictionary of values for
-        that segment.
-
-        @type content str
-        """
-        lines = content.split("\n")
-        keys = {}
-        for line in lines:
-            line_parts = re.split(r"\s+", line.strip(), 3)
-            if len(line_parts) < 4:
-                continue
-            keys[line_parts[1]] = line_parts[3]
-        return keys
-
-
     def iter_info_groups(self):
-        content = self._exec_tool()
-        for match in re.finditer(r"<1><[0-9a-f]+>: Abbrev Number: \d+ \(DW_TAG_subprogram\)(.*?)<\d><[0-9a-f]+>", content, re.DOTALL):
-            fields = self._decode_info_fields(match.group(1))
-            if 'DW_AT_low_pc' not in fields or 'DW_AT_high_pc' not in fields or 'DW_AT_name' not in fields:
-                continue
-            fn_name = fields['DW_AT_name'].split(' ')[-1] # Function name is the last word in this line.
-            fn_start = int(fields['DW_AT_low_pc'], 16)
-            fn_end = int(fields['DW_AT_high_pc'], 16)
-            fn_line = int(fields['DW_AT_decl_line']) if 'DW_AT_decl_line' in fields else None
-            yield FunctionRange(fn_name, fn_start, fn_end, fn_line)
+        # DWARF 4/5 may encode high_pc as an offset, not an address. Read
+        # its form instead of guessing from objdump's rendered number.
+        with open(self.elf, 'rb') as stream:
+            dwarf = ELFFile(stream).get_dwarf_info()
+            for unit in dwarf.iter_CUs():
+                for die in unit.iter_DIEs():
+                    if die.tag != 'DW_TAG_subprogram':
+                        continue
+                    attrs = die.attributes
+                    if 'DW_AT_low_pc' not in attrs or 'DW_AT_high_pc' not in attrs:
+                        continue
+                    origin = die
+                    if 'DW_AT_name' not in attrs and 'DW_AT_abstract_origin' in attrs:
+                        origin = die.get_DIE_from_attribute('DW_AT_abstract_origin')
+                    name = origin.attributes.get('DW_AT_name')
+                    if name is None:
+                        continue
+                    start = attrs['DW_AT_low_pc'].value
+                    high = attrs['DW_AT_high_pc']
+                    end = high.value
+                    if describe_form_class(high.form) == 'constant':
+                        end += start
+                    line = origin.attributes.get('DW_AT_decl_line')
+                    yield FunctionRange(name.value.decode('utf-8', errors='replace'),
+                                        start, end, line.value if line else None)
 
     def get_info_groups(self):
         return list(self.iter_info_groups())
