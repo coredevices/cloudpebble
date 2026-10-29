@@ -4,6 +4,7 @@ import re
 import zipfile
 
 from django.conf import settings
+from ide.utils.microphone_templates import TEMPLATES, build_microphone_archive
 
 
 WATCHFACE_TUTORIAL_PREFIX = 'watchface-tutorial'
@@ -38,7 +39,7 @@ def _is_native_project(project_dir):
 def list_c_templates():
     tutorial_root = _watchface_tutorial_root()
     if not os.path.isdir(tutorial_root):
-        return []
+        return list(TEMPLATES)
 
     templates = []
     for entry in os.listdir(tutorial_root):
@@ -63,7 +64,7 @@ def list_c_templates():
     templates.sort(key=lambda item: item['part_number'])
     for template in templates:
         template.pop('part_number', None)
-    return templates
+    return templates + list(TEMPLATES)
 
 
 def _resolve_template_directory(template_path):
@@ -75,6 +76,8 @@ def _resolve_template_directory(template_path):
 
 
 def build_c_template_archive(template_path):
+    if template_path in {item["id"] for item in TEMPLATES}:
+        return build_microphone_archive(template_path)
     target_dir, root = _resolve_template_directory(template_path)
     if not target_dir.startswith(root + os.sep):
         raise ValueError('Invalid template path')

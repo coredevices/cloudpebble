@@ -29,6 +29,7 @@ class Project(IdeModel):
         ('package', _('Pebble Package')),
         ('rocky', _('Rocky.js')),
         ('alloy', _('JavaScript SDK (beta)')),
+        ('plugin', _('Phone plugin')),
     )
     project_type = models.CharField(max_length=10, choices=PROJECT_TYPES, default='native')
 
@@ -47,6 +48,11 @@ class Project(IdeModel):
     app_platforms = models.TextField(max_length=255, blank=True, null=True)
     app_modern_multi_js = models.BooleanField(default=True)
     app_keywords = models.TextField(default='[]')
+    manifest_version = models.PositiveSmallIntegerField(default=2, choices=((1, 'Legacy'), (2, 'Permissions')))
+    uses_permissions = models.JSONField(default=list, blank=True)
+    plugin = models.JSONField(default=dict, blank=True)
+    config_page = models.TextField(default='', blank=True)
+
 
     app_capability_list = property(lambda self: self.app_capabilities.split(','))
     app_platform_list = property(lambda self: self.app_platforms.split(',') if self.app_platforms else [])
@@ -208,6 +214,8 @@ class Project(IdeModel):
 
     @property
     def supported_platforms(self):
+        if self.project_type == 'plugin':
+            return []
         if self.project_type == 'alloy':
             return ["emery", "gabbro", "flint"]
         supported_platforms = ["aplite", "basalt", "chalk", "gabbro"]
@@ -225,7 +233,7 @@ class Project(IdeModel):
 
     @property
     def is_standard_project_type(self):
-        return self.project_type in {'native', 'package', 'rocky', 'alloy'}
+        return self.project_type in {'native', 'package', 'rocky', 'alloy', 'plugin'}
 
     @property
     def pkjs_entry_point(self):
@@ -242,6 +250,8 @@ class Project(IdeModel):
             return None
 
     def clean(self):
+        from ide.utils.permissions import validate_project_manifest
+        validate_project_manifest(self)
         if self.project_type != 'package':
             try:
                 parse_sdk_version(self.app_version_label)
