@@ -50,6 +50,9 @@ def do_import_github(project_id, github_user, github_project, github_branch, del
         except:
             pass
 
+        if not github_branch:
+            client = get_github(user) if user and hasattr(user, 'github_repo_sync') else Github()
+            github_branch = client.get_repo('%s/%s' % (github_user, github_project)).default_branch
         url = "https://github.com/%s/%s/archive/%s.zip" % (github_user, github_project, github_branch)
         auth_url = get_authenticated_archive_url(user, github_user, github_project, github_branch)
         archive = None
