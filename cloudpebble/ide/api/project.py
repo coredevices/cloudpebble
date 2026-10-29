@@ -412,6 +412,10 @@ def project_info(request, project_id):
     source_files = SourceFile.objects.filter(project=project).order_by('file_name')
     resources = ResourceFile.objects.filter(project=project).order_by('file_name')
     return {
+        'manifest_version': project.manifest_version,
+        'uses_permissions': project.uses_permissions,
+        'plugin': project.plugin,
+        'config_page': project.config_page,
         'type': project.project_type,
         'name': project.name,
         'last_modified': str(project.last_modified),
@@ -635,6 +639,7 @@ def create_project(request):
                 app_is_watchface=False,
                 app_capabilities='',
                 project_type=project_type,
+                plugin={'script': 'plugin.js', 'sources': [{'category': 'demo', 'items': ['hello'], 'properties': {'message': ['shortText']}}]} if project_type == 'plugin' else {},
                 app_keys=app_keys,
                 app_platforms='emery,gabbro' if project_type == 'alloy' else None
             )
@@ -657,6 +662,12 @@ def create_project(request):
                 template = TemplateProject.objects.get(pk=template_id)
                 template_name = template.name
                 template.copy_into_project(project)
+            elif project_type == 'plugin':
+                from ide.utils.plugin_template import PLUGIN_SCRIPT, CONFIG_HTML
+                SourceFile.objects.create(project=project, file_name='plugin.js', target='plugin').save_text(PLUGIN_SCRIPT)
+                SourceFile.objects.create(project=project, file_name='config.html', target='config').save_text(CONFIG_HTML)
+                project.config_page = 'config.html'
+                project.app_platforms = ''
             elif project_type == 'simplyjs':
                 f = SourceFile.objects.create(project=project, file_name="app.js")
                 f.save_text(open('{}/src/html/demo.js'.format(settings.SIMPLYJS_ROOT)).read())
@@ -735,7 +746,17 @@ def save_project_settings(request, project_id):
     try:
         with transaction.atomic():
 
-            project.name = request.POST['name']
+            if 'manifest_version' in request.POST:
+                try:
+                    project.manifest_version = int(request.POST['manifest_version'])
+                    if project.manifest_version != 2:
+                        raise ValueError('CloudPebble uses manifest version 2.')
+                    project.uses_permissions = json.loads(request.POST.get('uses_permissions', '[]'))
+                    project.plugin = json.loads(request.POST.get('plugin', '{}'))
+                    project.config_page = request.POST.get('config_page', '').strip()
+                except (ValueError, TypeError):
+                    raise BadRequest(_('Check the manifest version and JSON in permissions and plugin settings.'))
+            project.name = request.POST['name'].strip()
             project.app_uuid = request.POST['app_uuid']
             project.app_company_name = request.POST['app_company_name']
             project.app_short_name = request.POST['app_short_name']
@@ -765,7 +786,7 @@ def save_project_settings(request, project_id):
                 if old_icon is not None:
                     old_icon.is_menu_icon = False
                     old_icon.save()
-                icon_resource = project.resources.filter(id=menu_icon)[0]
+                icon_resource = get_object_or_404(project.resources, id=menu_icon)
                 icon_resource.is_menu_icon = True
                 icon_resource.save()
             elif old_icon is not None:
@@ -773,8 +794,8 @@ def save_project_settings(request, project_id):
                 old_icon.save()
 
             project.save()
-    except IntegrityError as e:
-        return BadRequest(str(e))
+    except (IntegrityError, ValueError, TypeError, KeyError) as e:
+        raise BadRequest(str(e))
     else:
         send_td_event('cloudpebble_save_project_settings', request=request, project=project)
 

@@ -48,6 +48,8 @@ def generate_v2_manifest_dict(project, resources):
         "companyName": project.app_company_name,
         "versionLabel": project.app_version_label,
         "versionCode": 1,
+        "manifestVersion": project.manifest_version,
+        "usesPermissions": project.uses_permissions,
         "watchapp": {"watchface": project.app_is_watchface},
         "appKeys": json.loads(project.app_keys),
         "resources": generate_resource_dict(project, resources),
@@ -90,7 +92,18 @@ def generate_v3_manifest_dict(project, resources):
         manifest["pebble"]["displayName"] = project.app_long_name
         if project.app_is_hidden:
             manifest["pebble"]["watchapp"]["hiddenApp"] = project.app_is_hidden
-    if project.app_platforms:
+    if project.app_is_shown_on_communication:
+        manifest["pebble"]["watchapp"]["onlyShownOnCommunication"] = True
+    manifest["pebble"]["manifestVersion"] = project.manifest_version
+    if project.manifest_version == 2:
+        manifest["pebble"]["usesPermissions"] = project.uses_permissions
+        if project.plugin:
+            manifest["pebble"]["plugin"] = project.plugin
+        if project.config_page:
+            manifest["pebble"]["configPage"] = project.config_page
+    if project.project_type == 'plugin':
+        manifest["pebble"].pop("watchapp", None)
+    elif project.app_platforms:
         manifest["pebble"]["targetPlatforms"] = project.app_platform_list
     return manifest
 
@@ -249,6 +262,8 @@ def generate_simplyjs_manifest_dict(project):
         "companyName": project.app_company_name,
         "versionLabel": project.app_version_label,
         "versionCode": 1,
+        "manifestVersion": project.manifest_version,
+        "usesPermissions": project.uses_permissions,
         "capabilities": project.app_capabilities.split(","),
         "watchapp": {"watchface": project.app_is_watchface},
         "appKeys": {},
@@ -271,6 +286,8 @@ def generate_pebblejs_manifest_dict(project, resources):
         "versionLabel": project.app_version_label,
         "capabilities": project.app_capabilities.split(","),
         "versionCode": 1,
+        "manifestVersion": project.manifest_version,
+        "usesPermissions": project.uses_permissions,
         "watchapp": {
             "watchface": project.app_is_watchface,
             "hiddenApp": project.app_is_hidden,
@@ -341,5 +358,9 @@ def load_manifest_dict(manifest, manifest_kind, default_project_type="native"):
     project_type = manifest.get("projectType", default_project_type)
     if project_type == "moddable":
         project_type = "alloy"
+    project["manifest_version"] = manifest.get("manifestVersion", 2 if any(k in manifest for k in ('plugin', 'usesPermissions', 'configPage')) else 1)
+    project["uses_permissions"] = manifest.get("usesPermissions", [])
+    project["plugin"] = manifest.get("plugin", {})
+    project["config_page"] = manifest.get("configPage", '')
     project["project_type"] = project_type
     return project, media_map, dependencies

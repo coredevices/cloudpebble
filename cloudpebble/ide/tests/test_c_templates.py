@@ -28,9 +28,9 @@ class TestCTemplates(TestCase):
                 handle.write('int main(void) { return 0; }\n')
         return part_root
 
-    def test_list_c_templates_returns_empty_when_missing(self):
+    def test_list_c_templates_includes_builtins_when_checkout_missing(self):
         with mock.patch('ide.utils.c_templates._watchface_tutorial_root', return_value='/tmp/unused'):
-            self.assertEqual(list_c_templates(), [])
+            self.assertEqual([t['id'] for t in list_c_templates()], ['microphone/capture', 'microphone/stream'])
 
     def test_list_c_templates_discovers_and_sorts_parts(self):
         self._write_part('part3')
@@ -42,6 +42,8 @@ class TestCTemplates(TestCase):
         with mock.patch('ide.utils.c_templates._watchface_tutorial_root', return_value=self.tutorial_root):
             templates = list_c_templates()
 
+        self.assertEqual([t['id'] for t in templates[-2:]], ['microphone/capture', 'microphone/stream'])
+        templates = templates[:-2]
         ids = [template['id'] for template in templates]
         self.assertEqual(
             ids,

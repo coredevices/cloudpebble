@@ -348,6 +348,8 @@ def do_import_archive(project_id, archive, delete_project=False, wipe_existing=F
                     for root_file_name, loaded in file_exists_for_root.items():
                         if not loaded:
                             raise KeyError("No file was found to satisfy the manifest filename: {}".format(root_file_name))
+                    from ide.utils.permissions import migrate_manifest_v2
+                    migrate_manifest_v2(project)
                     project.save()
                     send_td_event('cloudpebble_zip_import_succeeded', project=project)
 

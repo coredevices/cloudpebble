@@ -376,6 +376,18 @@ def build(ctx):
 
 
 def generate_wscript_file(project, for_export=False):
+    if project.project_type == 'plugin':
+        return '''
+top = '.'
+out = 'build'
+def options(ctx):
+    ctx.load('pebble_sdk')
+def configure(ctx):
+    ctx.load('pebble_sdk')
+def build(ctx):
+    ctx.load('pebble_sdk')
+    ctx.pbl_bundle(binaries=[])
+'''
     if project.project_type == 'package':
         return generate_wscript_file_package(project, for_export)
     elif project.project_type == 'rocky':
