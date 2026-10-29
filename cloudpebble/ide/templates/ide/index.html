@@ -84,7 +84,8 @@
                         <!-- <option value="rocky">{% trans "Rocky.js (beta)" %}</option> -->
                         <!-- <option value="pebblejs">{% trans "Pebble.js (beta)" %}</option> -->
                         <option value="simplyjs" disabled>{% trans "Simply.js" %}</option>
-                    </select>
+                    <option value="plugin">{% trans 'Phone plugin' %}</option>
+</select>
                 </div>
             </div>
             <div class="control-group" id="template-holder">
@@ -173,7 +174,7 @@
                     <div class="control-group">
                         <label class="control-label" for="import-github-branch">{% trans "Branch (optional)" %}</label>
                         <div class="controls">
-                            <input type="text" id="import-github-branch" placeholder="master" />
+                            <input type="text" id="import-github-branch" placeholder="Repository default branch" />
                         </div>
                     </div>
                     {% if user.github_repo_sync %}

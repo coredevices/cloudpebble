@@ -64,7 +64,7 @@ $(function() {
     };
 
     $('#create-project').click(function() {
-        $('#create-project').find('input button select').removeAttr('disabled');
+        $('#project-prompt').find('input, button, select').removeAttr('disabled');
         $('#project-prompt').modal();
     });
     $('#project-type').change(function() {
@@ -89,13 +89,14 @@ $(function() {
     });
 
     $('#project-confirm-button').click(function() {
-        var value = $('#project-prompt-value').val();
-        $('project-prompt-errors').addClass("hide");
+        if ($(this).prop('disabled')) return;
+        var value = $('#project-prompt-value').val().trim();
+        $('#project-prompt-errors').addClass("hide");
         if(value === '') {
             $('#project-prompt-errors').removeClass('hide').text(gettext("You must enter a name."));
             return;
         }
-        $('#create-project').find('input button select').attr('disabled', 'disabled');
+        $('#project-prompt').find('input, button, select').attr('disabled', 'disabled');
         var post_data = {
             name: value,
             template: $('#project-template').val(),
@@ -108,6 +109,7 @@ $(function() {
             window.location.href = "/ide/project/" + data.id;
         }).catch(function(error) {
             $('#project-prompt-errors').removeClass('hide').text(error.toString());
+            $('#project-prompt').find('input, button, select').prop('disabled', false);
         });
     });
 
@@ -183,9 +185,7 @@ $(function() {
             active_set.find('.errors').removeClass('hide').text(gettext("You must specify a complete GitHub project URL"));
             return;
         }
-        if(branch.length == 0) {
-            branch = 'master';
-        }
+        branch = branch.trim();
         disable_import_controls();
         active_set.find('.progress').removeClass('hide');
         do_import(Ajax.Post('/ide/import/github', {

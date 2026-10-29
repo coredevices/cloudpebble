@@ -182,11 +182,17 @@
                         <option value="c" selected>{% trans 'C file' %}</option>
                         <option value="embeddedjs" class="alloy-only">{% trans 'Embedded JavaScript file' %}</option>
                         <option value="js">{% trans 'PebbleKit JavaScript file' %}</option>
+                        {% if project.project_type == 'native' or project.project_type == 'alloy' or project.project_type == 'rocky' or project.project_type == 'plugin' %}
+                        <option value="plugin">{% trans 'Plugin JavaScript / JSON' %}</option>
+                        <option value="config">{% trans 'Configuration HTML / CSS / SVG' %}</option>
+                        {% endif %}
                         <option value="json">{% trans 'JSON file' %}</option>
                         <option value="layout">{% trans 'Window Layout' %}</option>
                     </select>
                 </div>
             </div>
+            <div class="plugin-file-options file-group hide"><div class="control-group"><label class="control-label" for="new-plugin-file-name">{% trans 'Project path' %}</label><div class="controls"><input id="new-plugin-file-name" value="plugin.js"><span class="help-block">{% trans 'Relative to the project root. Match the script path in Plugin settings.' %}</span></div></div></div>
+            <div class="config-file-options file-group hide"><div class="control-group"><label class="control-label" for="new-config-file-name">{% trans 'Project path' %}</label><div class="controls"><input id="new-config-file-name" value="config.html"></div></div></div>
             <div class="include-file-options file-group hide">
                 <div class="control-group">
                     <label class="control-label" for="new-include-file-name">{% trans 'Include Name' %}</label>
@@ -642,6 +648,9 @@ if (window.firebase && firebase.apps && !firebase.apps.length) {
 </script>
 <script src="{% static 'CodeMirror/mode/clike/clike.js' %}"></script>
 <script src="{% static 'CodeMirror/mode/javascript/javascript.js' %}"></script>
+<script src="{% static 'CodeMirror/mode/xml/xml.js' %}"></script>
+<script src="{% static 'CodeMirror/mode/css/css.js' %}"></script>
+<script src="{% static 'CodeMirror/mode/htmlmixed/htmlmixed.js' %}"></script>
 <script src="{% static 'CodeMirror/keymap/emacs.js' %}"></script>
 <script src="{% static 'CodeMirror/keymap/vim.js' %}"></script>
 <script src="{% static 'ide/external/uuid.js' %}"></script>
@@ -670,6 +679,7 @@ window.JSHINT.errors = window.JSHINT.errors || [];
 <script src="{% static 'ide/js/resources.js' %}?v=20260219d" type="text/javascript"></script>
 <script src="{% static 'ide/js/textext_tagger.js' %}" type="text/javascript"></script>
 <script src="{% static 'ide/js/KVtable.js' %}" type="text/javascript"></script>
+<script src="{% static 'ide/js/permission_editor.js' %}" type="text/javascript"></script>
 <script src="{% static 'ide/js/settings.js' %}?v=20260219d" type="text/javascript"></script>
 <script src="{% static 'ide/js/timeline.js' %}" type="text/javascript"></script>
 <script src="{% static 'ide/external/gif.js' %}" type="text/javascript"></script>
