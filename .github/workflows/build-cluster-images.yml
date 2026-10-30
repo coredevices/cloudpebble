@@ -24,6 +24,9 @@ on:
       sdk_version:
         description: "Pebble SDK version"
         default: "4.33.1"
+      services:
+        description: "Comma-separated services to build+deploy (qemu redeploy restarts live emulator sessions)"
+        default: "qemu,ycmd,web"
   # Deploy only AFTER the Tests workflow passes on main.
   workflow_run:
     workflows: ["Tests"]
@@ -53,29 +56,45 @@ jobs:
         github.event.workflow_run.head_repository.full_name == github.repository
       ) }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read  # find the last successful build to diff against
     outputs:
       qemu: ${{ steps.f.outputs.qemu }}
       ycmd: ${{ steps.f.outputs.ycmd }}
+      web: ${{ steps.f.outputs.web }}
       sha: ${{ steps.sha.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-          fetch-depth: 2
+          fetch-depth: 0
       - id: sha
         run: echo "sha=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
       - id: f
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SERVICES: ${{ github.event.inputs.services || 'qemu,ycmd,web' }}
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "qemu=true" >> "$GITHUB_OUTPUT"
-            echo "ycmd=true" >> "$GITHUB_OUTPUT"
+            for s in qemu ycmd web; do
+              case ",${SERVICES// /}," in *",$s,"*) v=true;; *) v=false;; esac
+              echo "$s=$v" >> "$GITHUB_OUTPUT"
+            done
             exit 0
           fi
-          changed=$(git diff --name-only HEAD^ HEAD || true)
+          # Diff against the last successful build, not just HEAD^: a push of several
+          # commits (or a run skipped after failing Tests) must not lose changes.
+          base=$(gh run list -R "$GITHUB_REPOSITORY" --workflow build-cluster-images.yml \
+                   --status success --limit 1 --json headSha --jq '.[0].headSha // empty' || true)
+          if [ -z "$base" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then base=HEAD^; fi
+          echo "diffing ${base}..HEAD"
+          changed=$(git diff --name-only "$base" HEAD || true)
           echo "changed files:"; echo "$changed"
           grep -q '^cloudpebble-qemu-controller/' <<<"$changed" && echo "qemu=true" >> "$GITHUB_OUTPUT" || echo "qemu=false" >> "$GITHUB_OUTPUT"
           grep -q '^cloudpebble-ycmd-proxy/'      <<<"$changed" && echo "ycmd=true" >> "$GITHUB_OUTPUT" || echo "ycmd=false" >> "$GITHUB_OUTPUT"
+          grep -q '^cloudpebble/'                 <<<"$changed" && echo "web=true"  >> "$GITHUB_OUTPUT" || echo "web=false"  >> "$GITHUB_OUTPUT"
 
   build-deploy:
     needs: changes
@@ -104,6 +123,18 @@ jobs:
               PEBBLE_SDK_VERSION=${{ github.event.inputs.sdk_version || '4.33.1' }}
               NODE_VERSION=24.22.1
             smoke_env: ""
+          # Django web app + celery build worker: one image, two Deployments in
+          # web.yaml (RUN_WEB / RUN_CELERY), so the sed bump updates both.
+          - name: web
+            enabled: ${{ needs.changes.outputs.web }}
+            context: cloudpebble
+            image: cloudpebble-web
+            manifest: flux/apps/cloudpebble-web/web.yaml
+            build_args: |
+              PEBBLE_SDK_VERSION=${{ github.event.inputs.sdk_version || '4.33.1' }}
+              NODE_VERSION=24.22.1
+            # celery boots with no broker reachable and retries, so it stays up
+            smoke_env: "-e RUN_CELERY=yes -e SECRET_KEY=smoke-test -e REDIS_URL=redis://127.0.0.1:6390"
     steps:
       - name: Skip unchanged service
         if: matrix.enabled != 'true'
