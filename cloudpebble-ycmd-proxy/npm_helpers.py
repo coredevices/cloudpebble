@@ -39,6 +39,15 @@ def validate_dependencies(dependencies):
             raise ValueError("Dependencies are not allowed to reference paths")
 
 
+def _npm(root_dir, *args):
+    """ Run npm without lifecycle scripts. prune, install and dedupe all reify
+    node_modules, which runs install scripts by default, and the dependencies are
+    user-chosen. The env var outranks a project .npmrc; the flags outrank both. """
+    env = dict(os.environ, npm_config_ignore_scripts="true")
+    subprocess.check_output([settings.NPM_BINARY, *args, "--ignore-scripts", "--no-bin-links"],
+                            stderr=subprocess.STDOUT, cwd=root_dir, env=env)
+
+
 def install_dependencies(dependencies, root_dir):
     """ Install some npm dependencies into a directory and then extract the headers
     :param dependencies: a dictionary of name->version
@@ -50,10 +59,10 @@ def install_dependencies(dependencies, root_dir):
         try:
             # Install all the dependencies
             # TODO: Should NPM itself have resource limits?
-            subprocess.check_output([settings.NPM_BINARY, "prune"], stderr=subprocess.STDOUT, cwd=root_dir)
+            _npm(root_dir, "prune")
             if dependencies:
-                subprocess.check_output([settings.NPM_BINARY, "install", "--ignore-scripts", "--no-bin-links"], stderr=subprocess.STDOUT, cwd=root_dir)
-                subprocess.check_output([settings.NPM_BINARY, "dedupe"], stderr=subprocess.STDOUT, cwd=root_dir)
+                _npm(root_dir, "install")
+                _npm(root_dir, "dedupe")
         except subprocess.CalledProcessError:
             # Setting the error message to e.output here would let the user see their lovely NPM error output.
             raise NPMInstallError("One or more of your dependencies cannot be installed. Please check that the names and versions for all of your dependencies are valid.")

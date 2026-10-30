@@ -35,23 +35,11 @@ def spinup(content):
     resources = content.get('resources', [])
 
     print("spinup in %s" % root_dir)
-    # Dump all the files we should need.
-    for path, file_content in content['files'].items():
-        abs_path = os.path.normpath(os.path.join(root_dir, path))
-        if not abs_path.startswith(root_dir):
-            raise Exception("Failed: escaped root directory.")
-        dir_name = os.path.dirname(abs_path)
-        try:
-            os.makedirs(dir_name)
-        except OSError as e:
-            if e.errno == errno.EEXIST and os.path.isdir(dir_name):
-                pass
-            else:
-                raise
-        with open(abs_path, 'w') as f:
-            f.write(file_content)
-
     filesync = FileSync(root_dir)
+    # Dump all the files we should need. create_file rejects paths outside root_dir
+    # and any user-supplied .ycm_extra_conf.py.
+    for path, file_content in content['files'].items():
+        filesync.create_file(path, file_content)
 
     # Just ignore NPM failures on spinup since we don't wait them to kill YCM completely.
     # The user will notice that something is wrong when their includes all show as errors.

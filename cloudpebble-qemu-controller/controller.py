@@ -42,7 +42,8 @@ def log_request():
 
 @app.route('/qemu/launch', methods=['POST'])
 def launch():
-    if request.headers.get('authorization', None) != settings.LAUNCH_AUTH_HEADER:
+    supplied = request.headers.get('authorization', '').encode()
+    if not any(hmac.compare_digest(supplied, h.encode()) for h in settings.LAUNCH_AUTH_HEADERS):
         abort(403)
     if len(emulators) >= settings.EMULATOR_LIMIT:
         abort(503)

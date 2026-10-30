@@ -36,7 +36,10 @@ class YCM(object):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
             ycmd_settings = json.load(open(settings.YCMD_SETTINGS))
             ycmd_settings['hmac_secret'] = base64.b64encode(self._secret).decode('ascii')
-            ycmd_settings['confirm_extra_conf'] = 0
+            # Never auto-load extra confs: the server's own conf is force-loaded via
+            # apply_settings(); any other .ycm_extra_conf.py raises instead of running.
+            ycmd_settings['confirm_extra_conf'] = 1
+            ycmd_settings['extra_conf_globlist'] = []
             json.dump(ycmd_settings, f)
             options_file = f.name
         env = os.environ.copy()

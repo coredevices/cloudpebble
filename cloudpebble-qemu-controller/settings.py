@@ -4,6 +4,12 @@ from os import environ as env
 import multiprocessing
 
 LAUNCH_AUTH_HEADER = env.get('LAUNCH_AUTH_HEADER', 'secret')
+# Comma-separated accepted launch secrets. When set it replaces LAUNCH_AUTH_HEADER,
+# so a new secret can go live before every caller has switched to it.
+# Set-but-empty means no secret is accepted (fail closed), never the default.
+_launch_headers = env.get('LAUNCH_AUTH_HEADERS')
+LAUNCH_AUTH_HEADERS = ([h for h in _launch_headers.split(',') if h] if _launch_headers is not None
+                       else [LAUNCH_AUTH_HEADER])
 EMULATOR_LIMIT = int(env.get('EMULATOR_FIXED_LIMIT', multiprocessing.cpu_count() * 12))
 QEMU_BIN = env.get('QEMU_BIN', 'qemu-pebble')
 # Passed via -L so QEMU finds keymaps / firmware blobs at runtime.

@@ -43,7 +43,15 @@ env:
 jobs:
   # Gate on Tests success + detect which backend(s) actually changed.
   changes:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    # workflow_run's `branches: [main]` matches the head branch NAME, so a fork PR from
+    # a branch called main passes it. Only deploy pushes to this repo's own main.
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' || (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository
+      ) }}
     runs-on: ubuntu-latest
     outputs:
       qemu: ${{ steps.f.outputs.qemu }}

@@ -304,7 +304,8 @@ class Emulator(object):
         ] + oauth_arg
         if settings.BLOCK_PRIVATE_ADDRESSES:
             cmd.append('--block-private-addresses')
-        logging.info("spawning pkjs: token=%r (len=%d), cmd=%s", self.token, len(self.token), cmd)
+        # Never log token or cmd: cmd carries the session token and the user's OAuth token.
+        logging.info("spawning pkjs (token len=%d, oauth=%s)", len(self.token), self.oauth is not None)
         self.pkjs = subprocess.Popen(cmd, env=env)
         self.group.spawn(self.pkjs.communicate)
 

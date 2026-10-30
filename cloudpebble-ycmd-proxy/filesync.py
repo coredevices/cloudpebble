@@ -3,6 +3,13 @@ __author__ = 'katharine'
 import os.path
 import errno
 
+# ycmd imports any file with this name that sits above a source file. The server
+# writes the only legitimate one itself (ycm_helpers.spinup); user files may never
+# create, rename onto, or patch one. npm config/lock files are blocked too, since
+# npm_helpers runs npm in the project root.
+EXTRA_CONF_NAME = '.ycm_extra_conf.py'
+BLOCKED_NAMES = {EXTRA_CONF_NAME, '.npmrc', 'package-lock.json', 'npm-shrinkwrap.json'}
+
 
 class FileSync(object):
     def __init__(self, root_dir):
@@ -70,6 +77,8 @@ class FileSync(object):
 
     def abs_path(self, path):
         abs_path = os.path.normpath(os.path.join(self.root_dir, path))
-        if not abs_path.startswith(self.root_dir):
+        if os.path.commonpath([abs_path, self.root_dir]) != self.root_dir:
+            raise Exception("Bad path")
+        if os.path.basename(abs_path) in BLOCKED_NAMES:
             raise Exception("Bad path")
         return abs_path
