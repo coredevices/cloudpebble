@@ -64,7 +64,10 @@ ENV PATH="/root/.local/bin:$PATH"
 # stpyv8 (transitive dep) has a broken PEP 517 sdist (setup.py does
 # `from settings import *` against a local sibling that isn't on sys.path in
 # an isolated build). Force uv to use the prebuilt manylinux wheel instead.
-RUN uv pip install --system --only-binary=stpyv8 git+https://github.com/coredevices/pypkjs.git
+# Pinned to the commit production has run since 2026-08-23 (pypkjs 2.0.7). HEAD
+# moved to 3.x with a C extension (needs gcc) and the sed patches below target
+# 2.0.7's source. Bump deliberately, with an emulator smoke test.
+RUN uv pip install --system --only-binary=stpyv8 git+https://github.com/coredevices/pypkjs.git@b0710a5db80d57322371aa8b487366f71d4d74a4
 
 # pypkjs relies on requests/urllib3 internals that changed in urllib3 2.x.
 # Pin to known-compatible versions so XMLHttpRequest works in emulator PKJS.
