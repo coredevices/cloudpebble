@@ -5,6 +5,7 @@ import logging
 from django.utils.translation import gettext as _
 from django.conf import settings
 from django.utils.timezone import now
+from django.db import transaction
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
 
@@ -105,14 +106,27 @@ class S3File(IdeModel):
 
 @receiver(post_delete)
 def delete_file(sender, instance, **kwargs):
-    if issubclass(sender, S3File):
-        if settings.AWS_ENABLED:
+    # Remove the stored file only once the row deletion has committed. post_delete
+    # fires inside the delete's transaction: if that later fails (a project
+    # deleted while a build is still writing its BuildResult hit an FK violation
+    # at commit), the rows roll back but an eager delete had already destroyed
+    # the files, leaving a project whose sources are gone.
+    if not issubclass(sender, S3File):
+        return
+    if settings.AWS_ENABLED:
+        bucket, path = sender.bucket_name, instance.s3_path
+
+        def remove():
             try:
-                s3.delete_file(sender.bucket_name, instance.s3_path)
-            except:
+                s3.delete_file(bucket, path)
+            except Exception:
                 logger.exception("Failed to delete S3 file")
-        else:
+    else:
+        local = instance.local_filename
+
+        def remove():
             try:
-                os.unlink(instance.local_filename)
+                os.unlink(local)
             except OSError:
                 pass
+    transaction.on_commit(remove)
