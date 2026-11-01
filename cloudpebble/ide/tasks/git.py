@@ -10,10 +10,13 @@ import logging
 import zipfile
 
 from celery import shared_task
+from celery.exceptions import Retry
+from django.conf import settings
 from django.db import transaction
 from django.utils.timezone import now
 from github.GithubObject import NotSet
 from github import Github, GithubException, InputGitTreeElement
+from redis.exceptions import RedisError
 
 from ide.git import git_auth_check, get_github
 from ide.models.build import BuildResult
@@ -26,6 +29,7 @@ from ide.utils.project import find_project_root_and_manifest, BaseProjectItem, I
 from ide.utils.sdk import generate_manifest_dict, generate_manifest, generate_wscript_file, load_manifest_dict, manifest_name_for_project
 from utils.td_helper import send_td_event
 from utils.events import publish_event
+from utils.redis_helper import redis_client
 
 __author__ = 'katharine'
 
@@ -364,8 +368,55 @@ def parse_manifest_from_tree(tree_items, project):
     return root, manifest
 
 
+# Outlives the Celery hard time limit, so a killed pull frees the lock soon after.
+GITHUB_PULL_LOCK_SECONDS = settings.CELERY_TASK_TIME_LIMIT + 10
+GITHUB_PULL_RETRY_SECONDS = 15
+GITHUB_PULL_MAX_RETRIES = 60  # 15 minutes, longer than a lock can be held
+
+
+class GithubPullInProgress(Exception):
+    pass
+
+
+def _retry_pull_later(task, project_id):
+    """Retry a pull task until the project's running pull ends. Celery's retry keeps
+    the task id, so the IDE keeps polling it. Always raises."""
+    try:
+        raise task.retry(countdown=GITHUB_PULL_RETRY_SECONDS, max_retries=GITHUB_PULL_MAX_RETRIES)
+    except Retry:
+        raise
+    except Exception as e:
+        # Out of retries, or the retry could not be queued (Celery wraps that in a
+        # Reject, which records no result). Fail the task so the IDE stops polling.
+        publish_event(project_id, 'pull_failed')
+        raise Exception("Another GitHub pull for this project is still running.") from e
+
+
 @git_auth_check
 def github_pull(user, project, force=False):
+    """Pull the project's branch head; returns whether anything changed.
+
+    Pushes arrive in bursts and every push hook queues a pull. Concurrent pulls of
+    one project race on file creation, and a slow pull that read an older head can
+    finish last and roll the project back. So one pull per project runs at a time:
+    if another is running this raises GithubPullInProgress and the calling task
+    retries later. Whichever pull runs last re-reads the project and the
+    current head inside the lock, so the newest commit wins.
+    """
+    lock = redis_client.lock('github_pull:{}'.format(project.pk), timeout=GITHUB_PULL_LOCK_SECONDS)
+    if not lock.acquire(blocking=False):
+        raise GithubPullInProgress()
+    try:
+        project.refresh_from_db()
+        return _github_pull_locked(user, project, force)
+    finally:
+        try:
+            lock.release()
+        except RedisError:
+            logger.warning("Could not release GitHub pull lock for project %s", project.pk, exc_info=True)
+
+
+def _github_pull_locked(user, project, force):
     g = get_github(user)
     repo_name = project.github_repo
     if repo_name is None:
@@ -901,13 +952,15 @@ def do_github_push(project_id, commit_message):
     return github_push(project.owner, commit_message, project.github_repo, project)
 
 
-@shared_task
-def do_github_pull(project_id, force=False):
+@shared_task(bind=True)
+def do_github_pull(self, project_id, force=False):
     project = Project.objects.select_related('owner__github').get(pk=project_id)
     publish_event(project_id, 'pull_start')
     try:
         changed = github_pull(project.owner, project, force=force)
         publish_event(project_id, 'pull_complete', github_last_commit=project.github_last_commit or '')
+    except GithubPullInProgress:
+        _retry_pull_later(self, project_id)
     except Exception:
         publish_event(project_id, 'pull_failed')
         raise
@@ -920,8 +973,8 @@ def do_github_pull(project_id, force=False):
     return changed
 
 
-@shared_task
-def hooked_commit(project_id, target_commit):
+@shared_task(bind=True)
+def hooked_commit(self, project_id, target_commit):
     project = Project.objects.select_related('owner__github').get(pk=project_id)
     did_something = False
     logger.debug("Comparing %s versus %s", project.github_last_commit, target_commit)
@@ -930,6 +983,8 @@ def hooked_commit(project_id, target_commit):
         try:
             github_pull(project.owner, project, force=project.github_hook_force)
             publish_event(project_id, 'pull_complete', github_last_commit=project.github_last_commit or '', github_last_sync=str(project.github_last_sync) if project.github_last_sync else '')
+        except GithubPullInProgress:
+            _retry_pull_later(self, project_id)
         except Exception:
             publish_event(project_id, 'pull_failed')
             raise

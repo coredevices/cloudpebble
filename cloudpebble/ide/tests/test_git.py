@@ -645,6 +645,98 @@ class GithubPullRoutingTest(TestCase):
         self.assertIn('Unable to get the branch', str(ctx.exception))
 
 
+class GithubPullLockTest(TestCase):
+    def setUp(self):
+        from utils.redis_helper import redis_client
+        self.user = mock.MagicMock()
+        self.project = mock.MagicMock()
+        self.project.pk = 'lock-test'
+        redis_client.delete('github_pull:lock-test')
+
+    @mock.patch('ide.git.git_verify_tokens', return_value=True)
+    def test_second_pull_of_a_project_is_refused_while_one_runs(self, mock_verify):
+        import threading
+        from ide.tasks.git import GithubPullInProgress
+        started, finish = threading.Event(), threading.Event()
+        out = {}
+
+        def slow_pull(user, project, force):
+            started.set()
+            finish.wait(5)
+            return True
+
+        def first():
+            try:
+                out['result'] = github_pull(self.user, self.project)
+            except Exception as e:
+                out['error'] = e
+
+        with mock.patch('ide.tasks.git._github_pull_locked', side_effect=slow_pull):
+            t = threading.Thread(target=first)
+            t.start()
+            self.assertTrue(started.wait(5))
+            with self.assertRaises(GithubPullInProgress):
+                github_pull(self.user, self.project)
+            finish.set()
+            t.join(5)
+        self.assertEqual(out, {'result': True})
+        with mock.patch('ide.tasks.git._github_pull_locked', return_value=False):
+            self.assertFalse(github_pull(self.user, self.project))  # lock was released
+        self.assertEqual(self.project.refresh_from_db.call_count, 2)
+
+    @mock.patch('ide.git.git_verify_tokens', return_value=True)
+    @mock.patch('ide.tasks.git._github_pull_locked', return_value=True)
+    @mock.patch('ide.tasks.git.redis_client')
+    def test_lock_release_failure_does_not_fail_a_finished_pull(self, mock_redis, mock_locked, mock_verify):
+        from redis.exceptions import ConnectionError as RedisConnectionError
+        mock_redis.lock.return_value.acquire.return_value = True
+        mock_redis.lock.return_value.release.side_effect = RedisConnectionError('gone')
+        self.assertTrue(github_pull(self.user, self.project))
+
+
+class HookedCommitRetryTest(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from ide.models.project import Project
+        user = User.objects.create_user('retry-test', 'retry-test@example.com', 'pw')
+        self.project = Project.objects.create(owner=user, name='p', github_last_commit='old')
+
+    @mock.patch('ide.tasks.git.publish_event')
+    @mock.patch('ide.tasks.git.github_pull')
+    def test_hook_retries_while_another_pull_runs(self, mock_pull, mock_publish):
+        from celery.exceptions import Retry
+        from ide.tasks.git import hooked_commit, GithubPullInProgress, GITHUB_PULL_RETRY_SECONDS, GITHUB_PULL_MAX_RETRIES
+        mock_pull.side_effect = GithubPullInProgress()
+        with mock.patch.object(hooked_commit, 'retry', return_value=Retry()) as retry:
+            with self.assertRaises(Retry):
+                hooked_commit(self.project.pk, 'new')
+        retry.assert_called_once_with(countdown=GITHUB_PULL_RETRY_SECONDS, max_retries=GITHUB_PULL_MAX_RETRIES)
+        self.assertNotIn('pull_failed', [c.args[1] for c in mock_publish.call_args_list])
+
+
+class RetryPullLaterTest(TestCase):
+    def _fail_retry(self, error):
+        from ide.tasks.git import _retry_pull_later
+        task = mock.MagicMock()
+        task.retry.side_effect = error
+        with mock.patch('ide.tasks.git.publish_event') as mock_publish:
+            with self.assertRaises(Exception) as ctx:
+                _retry_pull_later(task, 7)
+        mock_publish.assert_called_once_with(7, 'pull_failed')
+        self.assertIs(type(ctx.exception), Exception)  # a plain failure the IDE sees
+        return task
+
+    def test_retries_with_an_explicit_limit(self):
+        from ide.tasks.git import GITHUB_PULL_MAX_RETRIES, GITHUB_PULL_RETRY_SECONDS
+        from celery.exceptions import MaxRetriesExceededError
+        task = self._fail_retry(MaxRetriesExceededError())
+        task.retry.assert_called_once_with(countdown=GITHUB_PULL_RETRY_SECONDS, max_retries=GITHUB_PULL_MAX_RETRIES)
+
+    def test_unqueueable_retry_becomes_a_plain_failure(self):
+        from celery.exceptions import Reject
+        self._fail_retry(Reject(ConnectionError('broker down'), requeue=False))
+
+
 class GithubPullDeltaTest(TestCase):
     def setUp(self):
         self.user = mock.MagicMock()
