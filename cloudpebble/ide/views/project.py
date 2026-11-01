@@ -74,7 +74,8 @@ def github_hook(request, project_id):
     project = get_object_or_404(Project, pk=project_id, github_hook_uuid=hook_uuid)
 
     push_info = json.loads(request.POST['payload'])
-    if push_info['ref'] == 'refs/heads/%s' % (project.github_branch or push_info['repository'].get('default_branch', push_info['repository'].get('master_branch', 'main'))):
+    # GitHub's 'ping' event, sent when the hook is created, has no 'ref'.
+    if push_info.get('ref') == 'refs/heads/%s' % (project.github_branch or push_info['repository'].get('default_branch', push_info['repository'].get('master_branch', 'main'))):
         hooked_commit.delay(project_id, push_info['after'])
 
     return HttpResponse('ok')
