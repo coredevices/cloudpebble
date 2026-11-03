@@ -28,3 +28,25 @@ class TestGithubHook(TestCase):
         response = self.post({'ref': 'refs/heads/main', 'after': 'abc123', 'repository': {'default_branch': 'main'}})
         self.assertEqual(response.status_code, 200)
         hooked_commit.delay.assert_called_once_with(str(self.project.pk), 'abc123')
+
+
+class TestLinkRepoWebhookDenied(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user('link-test', 'link-test@example.com', 'pw')
+        self.project = Project.objects.create(owner=self.user, name='p')
+        self.client.force_login(self.user)
+
+    @mock.patch('ide.api.git.ide.git.check_repo_access', return_value=True)
+    @mock.patch('ide.api.git.ide.git.git_verify_tokens', return_value=True)
+    @mock.patch('ide.api.git.ide.git.get_github')
+    def test_webhook_403_is_a_400_and_saves_nothing(self, get_github, _verify, _access):
+        from github import GithubException
+        g_repo = get_github.return_value.get_repo.return_value
+        g_repo.create_hook.side_effect = GithubException(403, {'message': 'Resource not accessible by integration'}, None)
+        response = self.client.post('/ide/project/%d/github/repo' % self.project.pk, {
+            'repo': 'github.com/someone/watchapp', 'branch': 'main', 'auto_pull': '1', 'auto_build': '0'})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('admin access', json.loads(response.content)['error'])
+        self.project.refresh_from_db()
+        self.assertIsNone(self.project.github_repo)
+        self.assertIsNone(self.project.github_hook_uuid)

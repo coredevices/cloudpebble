@@ -114,7 +114,12 @@ def set_project_repo(request, project_id):
             # Generate a new hook UUID
             project.github_hook_uuid = uuid.uuid4().hex
             # Set it up
-            g_repo.create_hook('web', {'url': settings.GITHUB_HOOK_TEMPLATE % {'project': project.id, 'key': project.github_hook_uuid}, 'content_type': 'form'}, ['push'], True)
+            try:
+                g_repo.create_hook('web', {'url': settings.GITHUB_HOOK_TEMPLATE % {'project': project.id, 'key': project.github_hook_uuid}, 'content_type': 'form'}, ['push'], True)
+            except GithubException as e:
+                if e.status == 403:
+                    raise BadRequest(_("GitHub denied creating the webhook needed for automatic pulls. Check that you have admin access to the repository and that the linked GitHub app can manage webhooks, or turn off automatic pulls to link the repository."))
+                raise
         elif not auto_pull:
             if project.github_hook_uuid is not None:
                 try:
