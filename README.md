@@ -4,21 +4,6 @@ A web-based IDE for developing Pebble smartwatch applications. Write C or JavaSc
 
 Try it out at https://cloudpebble.repebble.com
 
-## SDK 4.43: plugins and microphone
-
-Choose **Phone plugin** when creating a plugin-only project. CloudPebble creates a working `plugin.js` source and bundled `config.html`. For a combined watchapp/plugin, add these files to a C or JavaScript SDK project and set the plugin declaration in **Settings → Permissions & phone features**. Bundled HTML, CSS and SVG files can be edited in the source sidebar. The configuration page is packaged for the phone app; CloudPebble does not preview the phone configuration bridge.
-
-Apps use manifest v2 automatically. The database migration upgrades existing apps, and legacy ZIP/GitHub imports are upgraded after their sources load. Legacy PebbleKit JS access is declared as Internet, Location and Timeline; existing health/location capabilities and companion-app visibility are carried over. Users still approve access in the phone app. Add and remove permissions in Settings without editing JSON, with optional Internet domains and notification app packages. Imported custom declarations and parameters are preserved. Package libraries are excluded from app migration.
-
-The C project templates include **Microphone capture** and **Microphone streaming** examples. Build for Emery, Flint or Gabbro, install in the emulator, and use **Build & Run → Microphone & plugins**:
-
-1. Allow microphone access for the simulated app.
-2. Start **Test tone**, or **Use browser microphone** (requires HTTPS or localhost and browser permission).
-3. Press SELECT on the watch to start capture or streaming. The streaming example logs PCM sample counts in **View app logs**.
-4. Use **Stop audio** to release the browser microphone. Audio also stops on disconnect or page exit. **Deny microphone** tests permission revocation.
-
-**List plugins** shows the simulator's installed sources and actions. Plugin-only bundles can be installed without a watch binary. Simulator permission controls apply only to the local simulated app; phone permissions are managed by the Pebble phone app.
-
 ## Self-hosting instructions
 
 ```bash
