@@ -1009,11 +1009,18 @@ def get_projects(request):
     }
 
 
+# The archive travels to celery inside the task message, so a huge upload can
+# exhaust the broker's memory and crash the worker. Real projects are a few MB.
+MAX_IMPORT_ARCHIVE_BYTES = 16 * 1024 * 1024
+
+
 @login_required
 @require_POST
 @json_view
 def import_zip(request):
     zip_file = request.FILES['archive']
+    if zip_file.size > MAX_IMPORT_ARCHIVE_BYTES:
+        raise BadRequest(_("Project archives can be at most %d MB.") % (MAX_IMPORT_ARCHIVE_BYTES // (1024 * 1024)))
     name = request.POST['name']
     try:
         project = Project.objects.create(owner=request.user, name=name)
