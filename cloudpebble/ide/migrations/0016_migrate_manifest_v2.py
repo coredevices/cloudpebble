@@ -13,8 +13,7 @@ def migrate_projects(apps, schema_editor):
     pkjs_project_ids = set(SourceFile.objects.using(alias).filter(target='pkjs', project__in=projects)
                            .values_list('project_id', flat=True).distinct())
     batch = []
-    for project in projects.only('id', 'project_type', 'uses_permissions', 'app_capabilities',
-                                 'app_is_shown_on_communication').iterator(chunk_size=2000):
+    for project in projects.iterator(chunk_size=2000):
         permissions = list(project.uses_permissions)
         names = {p if isinstance(p, str) else p.get('name') for p in permissions}
         required = []
