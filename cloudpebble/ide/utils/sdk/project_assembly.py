@@ -17,7 +17,7 @@ def assemble_source_files(project, base_dir):
     for f in source_files:
         target_dir = os.path.join(base_dir, f.project_dir)
         abs_target = os.path.abspath(os.path.join(target_dir, f.file_name))
-        if not abs_target.startswith(target_dir):
+        if os.path.commonpath([abs_target, os.path.abspath(base_dir)]) != os.path.abspath(base_dir):
             raise Exception("Suspicious filename: %s" % f.file_name)
         abs_target_dir = os.path.dirname(abs_target)
         if not os.path.exists(abs_target_dir):

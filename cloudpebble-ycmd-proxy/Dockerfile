@@ -1,6 +1,7 @@
 FROM python:3.12-slim-bookworm AS ycmd-builder
 
 ARG PEBBLE_SDK_VERSION
+ARG TARGETARCH
 ARG NODE_VERSION=24.22.1
 
 # Build dependencies for ycmd with clang-completer
@@ -18,6 +19,7 @@ RUN git clone https://github.com/ycm-core/ycmd.git /ycmd && \
 FROM python:3.12-slim-bookworm
 
 ARG PEBBLE_SDK_VERSION
+ARG TARGETARCH
 ARG NODE_VERSION=24.22.1
 
 # Runtime deps
@@ -34,11 +36,12 @@ RUN curl -o /tmp/arm-cs-tools.tar https://cloudpebble-vagrant.s3.amazonaws.com/a
 
 # Node.js 24.x (for pebble npm dependencies)
 ENV NODE_VERSION=${NODE_VERSION} NPM_CONFIG_LOGLEVEL=info
-RUN curl -SLO "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.gz" \
+RUN NODE_ARCH=$(case "$TARGETARCH" in arm64) echo arm64;; *) echo x64;; esac) && \
+  curl -SLO "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-$NODE_ARCH.tar.gz" \
   && curl -SLO "https://nodejs.org/dist/v$NODE_VERSION/SHASUMS256.txt" \
-  && grep " node-v$NODE_VERSION-linux-x64.tar.gz\$" SHASUMS256.txt | sha256sum -c - \
-  && tar -xzf "node-v$NODE_VERSION-linux-x64.tar.gz" -C /usr/local --strip-components=1 \
-  && rm "node-v$NODE_VERSION-linux-x64.tar.gz" SHASUMS256.txt
+  && grep " node-v$NODE_VERSION-linux-$NODE_ARCH.tar.gz\$" SHASUMS256.txt | sha256sum -c - \
+  && tar -xzf "node-v$NODE_VERSION-linux-$NODE_ARCH.tar.gz" -C /usr/local --strip-components=1 \
+  && rm "node-v$NODE_VERSION-linux-$NODE_ARCH.tar.gz" SHASUMS256.txt
 
 # Pebble SDK (for include headers only – must match the version used by the
 # build system so that YCM sees headers for all supported platforms including

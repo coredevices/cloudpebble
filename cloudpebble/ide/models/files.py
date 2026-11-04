@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 import os
 import json
 import logging
@@ -292,6 +293,8 @@ class SourceFile(TextFile):
         ('public', _('Public Header File')),
         ('common', _('Shared JS')),
         ('embeddedjs', _('Embedded JS')),
+        ('plugin', _('Plugin JavaScript')),
+        ('config', _('Configuration files')),
     )
     target = models.CharField(max_length=12, choices=TARGETS, default='app')
 
@@ -324,7 +327,11 @@ class SourceFile(TextFile):
             ('app', ['src/c', 'src']),
         ])
     }
-    TEXT_EXTENSIONS = {'.c', '.h', '.js', '.json'}
+    DIR_MAP['plugin'] = {}
+    for _kind in ('native', 'alloy', 'rocky', 'plugin'):
+        DIR_MAP[_kind]['plugin'] = ['']
+        DIR_MAP[_kind]['config'] = ['']
+    TEXT_EXTENSIONS = {'.c', '.h', '.js', '.json', '.html', '.css', '.svg'}
 
     @staticmethod
     def _normalise_path(path):
@@ -337,6 +344,11 @@ class SourceFile(TextFile):
         what its name should be.
         """
         path = cls._normalise_path(path)
+        from ide.utils.permissions import validate_bundle_path
+        try:
+            validate_bundle_path(path)
+        except ValidationError as error:
+            raise ValueError(str(error))
         targets = cls.DIR_MAP[project_type]
         for target in targets:
             for base in targets[target]:
@@ -348,6 +360,10 @@ class SourceFile(TextFile):
                 continue
             break
         else:
+            if 'plugin' in targets and path.endswith(('.js', '.json')):
+                return path, 'plugin'
+            if 'config' in targets and path.endswith(('.html', '.css', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.woff', '.woff2')):
+                return path, 'config'
             raise ValueError(_("Unacceptable file path for this project [%s]") % path)
         if file_target == 'embeddedjs':
             expected_exts = None
@@ -387,10 +403,18 @@ class SourceFile(TextFile):
     def clean(self):
         super(SourceFile, self).clean()
         if self.project and self.target:
-            base = SourceFile.DIR_MAP[self.project.project_type][self.target][0]
+            try:
+                base = SourceFile.DIR_MAP[self.project.project_type][self.target][0]
+            except KeyError:
+                raise ValidationError('This file type is not supported by the project.')
             path = os.path.join(base, self.file_name)
             # Validate target/path and extension together.
-            SourceFile.get_details_for_path(self.project.project_type, path)
+            try:
+                _, actual_target = SourceFile.get_details_for_path(self.project.project_type, path)
+                if actual_target != self.target:
+                    raise ValueError('Use the file type that matches this project path.')
+            except ValueError as error:
+                raise ValidationError(str(error))
 
     class Meta(IdeModel.Meta):
         db_table = 'cloudpebble_source_files'
