@@ -64,6 +64,16 @@ else:
     # reliably send, raising "server didn't return client encoding". Pin it
     # explicitly so psycopg2 never has to read it back.
     DATABASES['default'].setdefault('OPTIONS', {})['client_encoding'] = 'UTF8'
+    # DATABASE_LOCAL_POOLER=127.0.0.1:6432 points Django at a pgbouncer sidecar that
+    # keeps warm connections to DATABASE_URL's host. Opening a fresh TLS connection to
+    # the Supabase pooler costs ~0.7 s from the cluster (Helsinki -> us-east-2), on
+    # every request and celery task. The hop to the sidecar is loopback: no TLS.
+    _local_pooler = _environ.get('DATABASE_LOCAL_POOLER')
+    if _local_pooler:
+        _host, _, _port = _local_pooler.rpartition(':')
+        DATABASES['default']['HOST'] = _host
+        DATABASES['default']['PORT'] = int(_port)
+        DATABASES['default']['OPTIONS']['sslmode'] = 'disable'
 
 PROJECT_PATH = os.path.dirname(os.path.abspath(__file__)) + '/../'
 

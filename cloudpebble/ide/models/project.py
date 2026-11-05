@@ -172,10 +172,16 @@ class Project(IdeModel):
             return parsed_keys
 
     def get_last_build(self):
+        if hasattr(self, '_cached_last_build'):
+            return self._cached_last_build
         try:
             return self.builds.order_by('-id')[0]
         except IndexError:
             return None
+
+    def cache_last_build(self, build):
+        """Pre-load get_last_build() for list views that fetch every project's last build at once."""
+        self._cached_last_build = build
 
     def get_menu_icon(self):
         try:
