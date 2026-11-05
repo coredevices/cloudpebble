@@ -439,7 +439,7 @@ def project_info(request, project_id):
         'interdependencies': [p.id for p in project.project_dependencies.all()],
         'app_platforms': project.app_platforms,
         'app_modern_multi_js': project.app_modern_multi_js,
-        'menu_icon': project.menu_icon.id if project.menu_icon else None,
+        'menu_icon': getattr(project.menu_icon, 'id', None),  # property: one query per access
         'source_files': [{
                              'name': f.file_name,
                              'id': f.id,
@@ -525,7 +525,7 @@ def last_build(request, project_id):
 def build_history(request, project_id):
     project = get_object_or_404(Project, pk=project_id, owner=request.user)
     try:
-        builds = project.builds.order_by('-started')[:10]
+        builds = project.builds.order_by('-started').prefetch_related('sizes')[:10]
     except (IndexError, BuildResult.DoesNotExist):
         return {"build": None}
 

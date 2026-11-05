@@ -1,4 +1,5 @@
 import logging
+import threading
 
 import boto3
 from botocore.config import Config
@@ -105,16 +106,24 @@ class BucketHolder(object):
             self.s3_resource = None
             self.bucket_names = None
 
+    # boto3's default session isn't safe for concurrent client creation, and
+    # autocomplete init reads files from several threads at once.
+    _configure_lock = threading.Lock()
+
+    def _ensure_configured(self):
+        if not self.configured:
+            with self._configure_lock:
+                if not self.configured:
+                    self.configure()
+
     def __getitem__(self, item):
         if settings.TESTING:
             raise Exception("S3 not mocked in test!")
-        if not self.configured:
-            self.configure()
+        self._ensure_configured()
         return self.bucket_names[item]
-    
+
     def get_bucket(self, item):
-        if not self.configured:
-            self.configure()
+        self._ensure_configured()
         return self.s3_resource.Bucket(self.bucket_names[item])
 
 
