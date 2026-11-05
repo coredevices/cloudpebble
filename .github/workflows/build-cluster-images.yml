@@ -130,8 +130,11 @@ jobs:
             context: cloudpebble
             image: cloudpebble-web
             manifest: flux/apps/cloudpebble-web/web.yaml
+            # celery runs the user builds, so this SDK is what compiles projects. Keep it with
+            # the others: 4.33.1 can't bundle plugin-only projects ("Cannot bundle watchapp
+            # without binaries"); 4.44 ships named_files for that.
             build_args: |
-              PEBBLE_SDK_VERSION=${{ github.event.inputs.sdk_version || '4.33.1' }}
+              PEBBLE_SDK_VERSION=${{ github.event.inputs.sdk_version || '4.44' }}
               NODE_VERSION=24.22.1
             # celery boots with no broker reachable and retries, so it stays up
             smoke_env: "-e RUN_CELERY=yes -e SECRET_KEY=smoke-test -e REDIS_URL=redis://127.0.0.1:6390"
