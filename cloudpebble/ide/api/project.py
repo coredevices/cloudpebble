@@ -409,8 +409,12 @@ Pebble.addEventListener("ready", function(e) {
 @json_view
 def project_info(request, project_id):
     project = get_object_or_404(Project, pk=project_id, owner=request.user)
-    source_files = SourceFile.objects.filter(project=project).order_by('file_name')
-    resources = ResourceFile.objects.filter(project=project).order_by('file_name')
+    # project_path / is_binary_source read f.project, and each resource lists its
+    # identifiers twice plus its variants: without these, a 100-file project ran
+    # ~140 queries (~17 s at the cluster's ~120 ms DB round trip).
+    source_files = SourceFile.objects.filter(project=project).select_related('project').order_by('file_name')
+    resources = (ResourceFile.objects.filter(project=project).order_by('file_name')
+                 .prefetch_related('identifiers', 'variants'))
     return {
         'manifest_version': project.manifest_version,
         'uses_permissions': project.uses_permissions,
@@ -1007,7 +1011,10 @@ def get_projects(request):
         parent_project_dependencies = parent_project.project_dependencies.all()
         exclusions['pk'] = libraries_for_project
 
-    projects = Project.objects.filter(**filters).exclude(**exclusions)
+    projects = list(Project.objects.filter(**filters).exclude(**exclusions))
+    latest_success = {b.project_id: b for b in BuildResult.objects
+                      .filter(project__in=projects, state=BuildResult.STATE_SUCCEEDED)
+                      .order_by('project_id', '-id').distinct('project_id')}
 
     def process_project(project):
         data = {
@@ -1017,10 +1024,8 @@ def get_projects(request):
             'app_version_label': project.app_version_label,
             'latest_successful_build': None
         }
-        try:
-            data['latest_successful_build'] = str(BuildResult.objects.filter(project=project, state=BuildResult.STATE_SUCCEEDED).latest('id').finished)
-        except BuildResult.DoesNotExist:
-            pass
+        if project.id in latest_success:
+            data['latest_successful_build'] = str(latest_success[project.id].finished)
         if parent_project:
             data['depended_on'] = project in parent_project_dependencies
         return data

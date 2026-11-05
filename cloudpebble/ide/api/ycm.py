@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 import json
 import logging
 import random
@@ -22,19 +23,22 @@ logger = logging.getLogger(__name__)
 @json_view
 def init_autocomplete(request, project_id):
     project = get_object_or_404(Project, pk=project_id, owner=request.user)
-    source_files = project.source_files.all()
+    source_files = [f for f in project.source_files.select_related('project') if f.is_editable_text]
 
-    file_contents = {}
-    for f in source_files:
-        if not f.is_editable_text:
-            continue
+    def read(f):
         content = f.get_contents()
         # Ensure content is string, not bytes
         if isinstance(content, bytes):
             content = content.decode('utf-8')
-        file_contents[f.project_path] = content
+        return f.project_path, content
 
-    identifiers = [(f.kind, i.resource_id) for f in project.resources.all() for i in f.identifiers.all()]
+    # One object-store GET per file; done one by one they added seconds to every
+    # editor open. boto3 clients are thread-safe (and gevent-patched under gunicorn).
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        file_contents = dict(pool.map(read, source_files))
+
+    identifiers = [(f.kind, i.resource_id) for f in project.resources.prefetch_related('identifiers')
+                   for i in f.identifiers.all()]
 
     appkey_names = [k for k, v in project.get_parsed_appkeys()]
 

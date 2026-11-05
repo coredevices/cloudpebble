@@ -62,7 +62,17 @@ class UserSettings(IdeModel):
     # What "what's new" prompt have they seen?
     whats_new = models.PositiveIntegerField(default=count_things)
 
-User.settings = property(lambda self: UserSettings.objects.get_or_create(user=self)[0])
+def _user_settings(user):
+    # Templates read user.settings.<x> several times per page; fetch it once per
+    # User instance (one request) instead of a query on every access.
+    cached = user.__dict__.get('_cloudpebble_settings')
+    if cached is None:
+        cached = UserSettings.objects.get_or_create(user=user)[0]
+        user.__dict__['_cloudpebble_settings'] = cached
+    return cached
+
+
+User.settings = property(_user_settings)
 
 
 class UserGithub(IdeModel):
