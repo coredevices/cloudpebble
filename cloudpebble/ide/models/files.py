@@ -88,7 +88,11 @@ class ResourceFile(IdeModel):
             return self.get_default_variant().root_path
         except ResourceVariant.DoesNotExist:
             # Failing that, strip the suffixes off an existing one
-            return self.variants.all()[0].root_path
+            variants = self.variants.all()[:1]  # LIMIT 1, or the prefetch cache
+            if not variants:
+                # An upload that never stored a file leaves a resource with no variants.
+                raise Exception(_("Resource '%s' has no uploaded file. Re-upload it or delete it, then build again.") % self.file_name)
+            return variants[0].root_path
 
     class Meta(IdeModel.Meta):
         db_table = 'cloudpebble_resource_files'
