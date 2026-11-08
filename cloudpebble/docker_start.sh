@@ -23,6 +23,10 @@ if [ ! -z "$RUN_WEB" ]; then
 		$PYTHON manage.py migrate --noinput
 	fi
 	$PYTHON manage.py collectstatic --noinput 2>/dev/null || true
+	# Agent turns are relayed by threads in this process; nothing survives the
+	# restart that is about to finish. Release them so their sessions are not
+	# wedged 'running' until the stale-turn timeout half an hour from now.
+	$PYTHON manage.py release_orphaned_agent_turns 2>/dev/null || true
 	if [ ! -z "$DEBUG" ]; then
 		$PYTHON manage.py runserver 0.0.0.0:$PORT
 	else

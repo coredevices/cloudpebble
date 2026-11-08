@@ -18,17 +18,44 @@ rsync -avz --delete \
   --exclude='.env' \
   --exclude='.env.local' \
   --exclude='.DS_Store' \
+  --exclude='__pycache__' \
+  --exclude='cloudpebble/agent/' \
   -e "ssh -i $SSH_KEY" \
   "$SCRIPT_DIR/" "$DEV_HOST":~/cloudpebble/
 
-echo "==> Building images..."
-$SSH "cd ~/cloudpebble && docker compose --profile emulator --profile codecomplete build"
+# The app is web+celery. qemu and ycmd are sidecars that change rarely, and
+# rebuilding them on every deploy costs ~8GB of layers -- enough to fill this
+# box's 19GB disk and fail the deploy partway through. Pass --all when a sidecar
+# actually changed.
+if [[ "${1:-}" == "--all" ]]; then
+  BUILD_TARGETS=""
+  PROFILES="--profile emulator --profile codecomplete"
+  echo "==> Building ALL images (including qemu + ycmd sidecars)..."
+else
+  BUILD_TARGETS="web celery"
+  PROFILES=""
+  echo "==> Building app images (web, celery). Use --all to rebuild sidecars too."
+fi
+
+# This box has a 19GB disk and each rebuild leaves the previous image layers
+# behind, which has failed a deploy mid-build more than once. Reclaim first:
+# dangling images and build cache only, so nothing in use is touched.
+echo "==> Reclaiming disk..."
+$SSH "docker image prune -f >/dev/null 2>&1; docker builder prune -af >/dev/null 2>&1; df -h / | tail -1"
+
+$SSH "cd ~/cloudpebble && docker compose $PROFILES build $BUILD_TARGETS"
 
 echo "==> Restarting services..."
-$SSH "cd ~/cloudpebble && docker compose --profile emulator --profile codecomplete down && docker compose --profile emulator --profile codecomplete up -d"
+# Recreate rather than restart: env changes and new code only take effect on a
+# fresh container. nginx resolves upstreams at startup, so it must come after.
+$SSH "cd ~/cloudpebble && docker compose --profile emulator --profile codecomplete up -d $BUILD_TARGETS"
+$SSH "cd ~/cloudpebble && docker compose restart nginx"
 
 echo "==> Waiting for web to start..."
-sleep 5
+sleep 8
+
+echo "==> Applying migrations..."
+$SSH "cd ~/cloudpebble && docker compose exec -T web /usr/local/bin/python /code/manage.py migrate --noinput" || true
 
 echo "==> Container status:"
 $SSH "cd ~/cloudpebble && docker compose --profile emulator --profile codecomplete ps"
