@@ -5,3 +5,5 @@ CLAUDE.md
 SECURITYPLAN.md
 .gstack/
 node_modules/
+# Built into the web image from coredevices/pebble-apps.
+cloudpebble/ide/static/ide/plugin-preview/

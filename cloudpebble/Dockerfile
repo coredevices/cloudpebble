@@ -81,12 +81,27 @@ RUN pebble sdk activate $PEBBLE_SDK_VERSION
 ENV PEBBLE_SDK_PATH=/root/.local/share/pebble-sdk
 ENV PATH="${PEBBLE_SDK_PATH}/SDKs/current/toolchain/arm-none-eabi/bin:$PATH"
 
+# Demo apps a plugin project is previewed in (Compilation -> Preview plugin), built with this
+# image's SDK. Pinned to a commit so the image is reproducible: bump PEBBLE_APPS_REF to update them.
+ARG PEBBLE_APPS_REF=11809f856b00b3ac5e91b6cf58c251db6aed4b56
+RUN git init -q /tmp/pebble-apps && cd /tmp/pebble-apps && \
+  git fetch -q --depth 1 https://github.com/coredevices/pebble-apps.git "$PEBBLE_APPS_REF" && \
+  git checkout -q FETCH_HEAD && \
+  mkdir -p /opt/plugin-preview && \
+  for app in plugin-test complication-face; do \
+    python3 scripts/pack-plugin-pbw.py "$app" && cp "$app/build/$app.pbw" /opt/plugin-preview/ || exit 1; \
+  done && \
+  cd / && rm -rf /tmp/pebble-apps
+
 ADD requirements.txt /tmp/requirements.txt
 # Use Python 3.11 from the base image directly
 RUN /usr/local/bin/pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY . /code
 WORKDIR /code
+
+# Served as static files; ide.utils.plugin_preview offers whichever are here.
+RUN mkdir -p /code/ide/static/ide/plugin-preview && cp /opt/plugin-preview/*.pbw /code/ide/static/ide/plugin-preview/
 
 # Keep tutorial/example repos synced to latest upstream at image build time.
 # This is intentionally after COPY so each new app commit invalidates this layer.

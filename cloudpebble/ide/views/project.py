@@ -10,6 +10,7 @@ from ide.models.build import BuildResult
 from ide.models.project import Project
 from ide.tasks.git import hooked_commit
 from ide.utils import generate_half_uuid
+from ide.utils.plugin_preview import available_viewers
 from utils.td_helper import send_td_event
 from ide.utils.regexes import regexes
 
@@ -55,6 +56,7 @@ def view_project(request, project_id):
         'libpebble_proxy': json.dumps(settings.LIBPEBBLE_PROXY),
         'cloudpebble_proxy': json.dumps(settings.CLOUDPEBBLE_PROXY),
         'cloudpebble_proxy_v2': json.dumps(None),
+        'plugin_preview_viewers': json.dumps(available_viewers()),
         'token': token,
         'firebase_token': firebase_token,
         'firebase_token_exp': firebase_token_exp,

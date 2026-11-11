@@ -173,3 +173,21 @@ class PermissionMigrationTests(TestCase):
         project.refresh_from_db()
         self.assertEqual(project.manifest_version, 2)
         self.assertEqual(project.uses_permissions, ['Internet', 'Location', 'Timeline'])
+
+
+class PluginPreviewViewerTests(TestCase):
+    def test_only_viewers_whose_pbw_is_present_are_offered(self):
+        from ide.utils import plugin_preview
+        present = {'ide/plugin-preview/plugin-test.pbw': '/static-root/plugin-test.pbw'}
+        with patch.object(plugin_preview.finders, 'find', side_effect=present.get):
+            viewers = plugin_preview.available_viewers()
+        self.assertEqual([v['id'] for v in viewers], ['dashboard'])
+        self.assertEqual(viewers[0]['uuid'], '8b1c6b0e-7d6a-4cf2-a9b2-2c3f8b1c6b0e')
+        self.assertTrue(viewers[0]['url'].endswith('ide/plugin-preview/plugin-test.pbw'))
+        self.assertTrue(viewers[0]['has_settings'])
+        json.dumps(viewers)
+
+    def test_no_pbws_means_no_preview(self):
+        from ide.utils import plugin_preview
+        with patch.object(plugin_preview.finders, 'find', return_value=None):
+            self.assertEqual(plugin_preview.available_viewers(), [])
