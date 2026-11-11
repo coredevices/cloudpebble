@@ -15,6 +15,8 @@ import pwd
 import grp
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 
 from gevent import pywsgi
 from geventwebsocket.handler import WebSocketHandler
@@ -22,6 +24,7 @@ import geventwebsocket
 import websocket
 
 import settings
+import config_proxy
 from emulator import Emulator
 from uuid import uuid4, UUID
 import logging
@@ -103,7 +106,11 @@ def kill(emu):
     return jsonify(status='ok')
 
 
-def proxy_ws(emu, attr, subprotocols=[]):
+def proxy_ws(emu, attr, subprotocols=[], path='/', text=False, close_together=False):
+    """Relay a browser WebSocket to one of the emulator's own. Frames go on as binary unless
+    `text`, which keeps each frame's own type (for JSON protocols the browser reads as text).
+    `close_together` ends the relay as soon as either side goes, so the target sees the browser
+    leave; otherwise it lasts until both have."""
     server_ws = request.environ.get('wsgi.websocket', None)
     if server_ws is None:
         logging.warning("proxy_ws: no wsgi.websocket in environ for %s", attr)
@@ -115,7 +122,7 @@ def proxy_ws(emu, attr, subprotocols=[]):
         logging.warning("proxy_ws: emulator %s not found", emu)
         abort(404)
         return  # unreachable but makes IDE happy.
-    target_url = "ws://localhost:%d/" % getattr(emulator, attr)
+    target_url = "ws://localhost:%d%s" % (getattr(emulator, attr), path)
     logging.info("proxy_ws: connecting to %s (attr=%s)", target_url, attr)
     # The target (notably pypkjs) may still be booting when the browser
     # connects, so retry connection-refused for a while before giving up.
@@ -154,9 +161,29 @@ def proxy_ws(emu, attr, subprotocols=[]):
             alive[0] = False
             raise
 
+    def to_target(data):
+        if text and isinstance(data, str):
+            client_ws.send(data)
+        else:
+            client_ws.send_binary(data)
+
+    def from_target():
+        data = client_ws.recv()
+        return data if text and isinstance(data, str) else bytearray(data)
+
     group = gevent.pool.Group()
-    group.spawn(do_recv, "browser->target", lambda: server_ws.receive(), lambda x: client_ws.send_binary(x))
-    group.spawn(do_recv, "target->browser", lambda: bytearray(client_ws.recv()), lambda x: server_ws.send(x))
+    group.spawn(do_recv, "browser->target", lambda: server_ws.receive(), to_target)
+    group.spawn(do_recv, "target->browser", from_target, lambda x: server_ws.send(x))
+    if close_together:
+        # Either reader finishing closes both sockets, which ends the other reader too.
+        def close_both(greenlet):
+            for close in (client_ws.close, server_ws.close):
+                try:
+                    close()
+                except Exception:
+                    pass
+        for greenlet in group:
+            greenlet.link(close_both)
     group.join()
     logging.info("proxy_ws: relay ended for %s", target_url)
     return ''
@@ -179,6 +206,55 @@ def ws_vnc(emu):
         return proxy_ws(emu, 'vnc_ws_port', subprotocols=['binary'])
     except Exception:
         logging.exception("ws_vnc crashed")
+        return 'error', 500
+
+
+def _config_page_emulator(emu, uuid):
+    """The emulator a settings-page request is for, once its token and the pbw uuid check out."""
+    try:
+        emulator = emulators[UUID(emu)]
+        UUID(uuid)
+    except (ValueError, KeyError):
+        abort(404)
+    token = request.args.get('token', '')
+    if not token or not hmac.compare_digest(token.encode('utf-8'),
+                                            (emulator.token or '').encode('utf-8')):
+        logging.warning("config page: bad token for emu=%s", emu)
+        abort(403)
+    return emulator
+
+
+@app.route('/qemu/<emu>/config/<uuid>/')
+def config_page(emu, uuid):
+    """An installed pbw's settings page, as the emulator's phone simulator serves it."""
+    emulator = _config_page_emulator(emu, uuid)
+    try:
+        with urllib.request.urlopen('http://localhost:%d/config/%s/' % (emulator.ws_port, uuid),
+                                    timeout=30) as response:
+            html = response.read().decode('utf-8', 'replace')
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            logging.warning("config page: phone simulator answered %d for %s", e.code, uuid)
+            return "The phone simulator could not serve this settings page.", 502
+        return ("No settings page for this app is installed on the emulator. "
+                "Install a build that has one, then try again."), 404
+    except OSError:
+        logging.exception("config page: phone simulator unreachable")
+        return "The phone simulator is not running.", 502
+    html, found = config_proxy.rewrite_bridge(html, uuid)
+    if not found:
+        logging.warning("config page: no bridge path to rewrite for %s", uuid)
+    return html, 200, config_proxy.PAGE_HEADERS
+
+
+@app.route('/qemu/<emu>/config/<uuid>/bridge')
+def config_bridge(emu, uuid):
+    """The settings page's live connection to its pbw's scripts."""
+    _config_page_emulator(emu, uuid)
+    try:
+        return proxy_ws(emu, 'ws_port', path='/config/%s/bridge' % uuid, text=True, close_together=True)
+    except Exception:
+        logging.exception("config_bridge crashed")
         return 'error', 500
 
 
@@ -315,6 +391,13 @@ class WebSocketFixMiddleware(object):
             environ.pop('HTTP_CONNECTION', None)
         return self._app(environ, start_response)
 
+class TokenRedactingHandler(WebSocketHandler):
+    """The settings-page and audio endpoints take the emulator token in the query string, which
+    the access log would otherwise record."""
+    def format_request(self):
+        return config_proxy.redact_token(super().format_request())
+
+
 if __name__ == '__main__':
     app.debug = settings.DEBUG
     ssl_args = {}
@@ -327,7 +410,7 @@ if __name__ == '__main__':
             'ciphers': 'EECDH+ECDSA+AESGCM EECDH+aRSA+AESGCM EECDH+ECDSA+SHA384 EECDH+ECDSA+SHA256 EECDH+aRSA+SHA384 EECDH+aRSA+SHA256 EECDH+aRSA+RC4 EECDH EDH+aRSA RC4 !aNULL !eNULL !LOW !3DES !MD5 !EXP !PSK !SRP !DSS !RC4',
         }
     ws_app = WebSocketFixMiddleware(app)
-    server = pywsgi.WSGIServer(('', settings.PORT), ws_app, handler_class=WebSocketHandler, **ssl_args)
+    server = pywsgi.WSGIServer(('', settings.PORT), ws_app, handler_class=TokenRedactingHandler, **ssl_args)
     server.start()
     if settings.RUN_AS_USER is not None:
         drop_privileges(settings.RUN_AS_USER, settings.RUN_AS_USER)

@@ -260,6 +260,9 @@ Pebble = function(proxy, token, authMode) {
             console.log(length);
             var url = unpack("S" + length, data.subarray(5))[0];
 			url = url.replace("http://clay.pebble.com.s3-website-us-west-2.amazonaws.com/", "https://coredevices.github.io/clay-emulator/emulator.html");
+            if (window.SharedPebble && SharedPebble.rewriteConfigURL) {
+                url = SharedPebble.rewriteConfigURL(url);
+            }
             console.log("opening url: " + url);
             var new_url = manipulate_url(url);
             console.log("new url: " + new_url);

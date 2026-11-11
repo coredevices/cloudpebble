@@ -342,6 +342,20 @@ var SharedPebble = new (function() {
         return ConnectionPlatformNames[mConnectionType];
     };
 
+    /** An installed pbw's settings page on the running emulator, or null if there isn't one running. */
+    this.getConfigPageURL = function(uuid) {
+        return (self.isVirtual() && mEmulator) ? mEmulator.getConfigPageURL(uuid) : null;
+    };
+
+    /**
+     * The emulator's phone serves bundled settings pages on its own localhost, which the browser
+     * can't reach: send those through the controller instead. Other URLs are left alone.
+     */
+    this.rewriteConfigURL = function(url) {
+        var match = /^http:\/\/localhost:\d+\/config\/([0-9a-fA-F-]{36})\/$/.exec(url);
+        return (match && self.getConfigPageURL(match[1])) || url;
+    };
+
     function getWebsocketURL() {
         if (mConnectionType & ConnectionType.Qemu) {
             return mEmulator.getWebsocketURL();

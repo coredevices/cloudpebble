@@ -403,6 +403,11 @@
             return mToken;
         };
 
+        /** Where the controller serves an installed pbw's settings page from this emulator's phone. */
+        this.getConfigPageURL = function(uuid) {
+            return buildURL('config/' + uuid + '/') + '?token=' + encodeURIComponent(mToken);
+        };
+
         this.getUUID = function() {
             return mInstanceID;
         };
