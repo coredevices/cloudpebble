@@ -43,8 +43,8 @@ DC="docker compose -f compose.hetzner.yml"
 # The server's .env is never rsynced, so its copies of the build pins go stale and
 # silently rebuild an old SDK. Pass them from this repo instead — a shell env var
 # beats the remote .env in compose.
-BUILD_PINS=$(printf 'PEBBLE_SDK_VERSION=%q NODE_VERSION_YCMD=%q' \
-  "$PEBBLE_SDK_VERSION" "${NODE_VERSION_YCMD:-24.22.1}")
+BUILD_PINS=$(printf 'PEBBLE_SDK_VERSION=%q NODE_VERSION_YCMD=%q PYPKJS_REF=%q' \
+  "$PEBBLE_SDK_VERSION" "${NODE_VERSION_YCMD:-24.22.1}" "${PYPKJS_REF:-master}")
 
 echo "==> Building images (SDK $PEBBLE_SDK_VERSION)..."
 $SSH "cd ~/cloudpebble && $BUILD_PINS $DC build $NO_CACHE"

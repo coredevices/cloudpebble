@@ -27,6 +27,7 @@ services:
       context: cloudpebble-qemu-controller/
       args:
         PEBBLE_SDK_VERSION: ${PEBBLE_SDK_VERSION}
+        PYPKJS_REF: ${PYPKJS_REF:-master}
     restart: unless-stopped
     environment:
       - EMULATOR_FIXED_LIMIT=${EMULATOR_FIXED_LIMIT:-90}

@@ -65,7 +65,10 @@ ENV PATH="/root/.local/bin:$PATH"
 # `from settings import *` against a local sibling that isn't on sys.path in
 # an isolated build). Force uv to use the prebuilt manylinux wheel instead.
 RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev && rm -rf /var/lib/apt/lists/*
-RUN uv pip install --system --only-binary=stpyv8 git+https://github.com/coredevices/pypkjs.git
+# PYPKJS_REF is a branch, tag or commit. Docker caches this layer by its text, so a moving ref
+# like master is only fetched again when the cache is dropped: name a commit to pick up a change.
+ARG PYPKJS_REF=master
+RUN uv pip install --system --only-binary=stpyv8 "git+https://github.com/coredevices/pypkjs.git@${PYPKJS_REF}"
 
 # pypkjs relies on requests/urllib3 internals that changed in urllib3 2.x.
 # Pin to known-compatible versions so XMLHttpRequest works in emulator PKJS.
