@@ -1758,6 +1758,21 @@ label .text-icon {
 .mic-status { border: 0; border-radius: 5px; background: #333; }
 .feature-badge { background: transparent; font-size: 13px; color: #aaa; }
 
+/* Preview plugin: the readings to show, then where to show them. */
+.plugin-preview { margin-bottom: 18px; }
+.plugin-preview .tool-row { align-items: flex-start; }
+.plugin-preview .tool-label { padding-top: 7px; min-width: 120px; }
+.plugin-preview-count { display: block; color: #aaa; font-size: 13px; }
+.plugin-preview-readings { flex: 1; min-width: 0; max-height: 200px; overflow: auto; background: #333; border-radius: 5px; padding: 6px 12px; }
+/* The pane's form gives every label a fixed 90px column; these are rows, not field labels. */
+.compilation-pane form.form-horizontal .plugin-preview-reading { display: flex; align-items: center; gap: 10px; width: auto; margin: 0; padding: 6px 0; font-size: 15px; color: #ddd; cursor: pointer; }
+.plugin-preview-reading input[type=checkbox] { appearance: auto; -webkit-appearance: checkbox; background: none; box-shadow: none; accent-color: #ff4700; width: 18px; height: 18px; margin: 0; padding: 0; flex: none; }
+.plugin-preview-reading-name { overflow-wrap: anywhere; }
+.plugin-preview-reading-shapes { margin-left: auto; color: #aaa; font-size: 13px; text-align: right; }
+.plugin-preview-reading input:disabled ~ span { color: #777; }
+.plugin-preview-empty { margin: 6px 0; color: #aaa; font-size: 15px; }
+.plugin-preview .tool-actions { flex: 1; }
+
 /* Carry the classic treatment through project settings. */
 .settings-pane .well, .settings-pane .form-actions {
     border: 0; border-radius: 10px; padding: 25px 30px;

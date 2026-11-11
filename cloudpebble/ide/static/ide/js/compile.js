@@ -250,6 +250,7 @@ CloudPebble.Compile = (function() {
     var show_compile_pane = function() {
         CloudPebble.Sidebar.SuspendActive();
         if(CloudPebble.Sidebar.Restore("compile")) {
+            CloudPebble.PluginPreview.Refresh();
             return;
         }
         if (!CloudPebble.ProjectProperties.is_runnable) {
@@ -277,7 +278,8 @@ CloudPebble.Compile = (function() {
                 return true;
             }
         });
-        if (CloudPebble.ProjectInfo.type === 'plugin') pane.find('#run-qemu').prepend($('<p>').text(gettext('Install into the phone simulator, then run a watchapp that reads your plugin.')));
+        CloudPebble.PluginPreview.Init(pane);
+        if (CloudPebble.ProjectInfo.type === 'plugin') pane.find('#run-qemu').prepend($('<p>').text(gettext('Install into the phone simulator, or use Preview plugin below to see its readings on a watch.')));
     };
 
     var run_build = function() {
@@ -615,8 +617,10 @@ CloudPebble.Compile = (function() {
 
 
 
-    var install_on_watch = function(kind, build) {
+    // `messages` ({preparing, success}) names what is being installed when it isn't just "the app".
+    var install_on_watch = function(kind, build, messages) {
         var installBuild = build || mLastBuild;
+        messages = messages || {};
         if(!installBuild || !installBuild.download || !installBuild.sizes) {
             return Promise.reject(new Error(gettext("No successful build is available to install.")));
         }
@@ -631,7 +635,7 @@ CloudPebble.Compile = (function() {
                     if(code === 0) {
                         add_log_divider();
                         pebble.enable_app_logs();
-                        modal.find('.modal-body > p').text(gettext("Installed successfully!"));
+                        modal.find('.modal-body > p').text(messages.success || gettext("Installed successfully!"));
                         modal.find('.btn').removeClass('hide');
                         modal.find('.logs-btn').off('click').click(function () {
                             modal.off('hide');
@@ -660,7 +664,7 @@ CloudPebble.Compile = (function() {
                 });
 
                 modal.modal();
-                modal.find('.modal-body > p').text(gettext("Preparing to install app…"));
+                modal.find('.modal-body > p').text(messages.preparing || gettext("Preparing to install app…"));
                 modal.find('.btn').addClass('hide');
                 modal.find('.progress').removeClass('progress-danger progress-success').addClass('progress-striped').find('.bar').css({width: '100%'});
                 modal.off('hide');
@@ -706,7 +710,7 @@ CloudPebble.Compile = (function() {
                         var expectedBytes = Math.max(1, size.binary + size.worker + size.resources);
                         pebble.on('install:progress', onProgress = function(bytes) {
                             resetInstallTimeout();
-                            modal.find('.modal-body > p').text(gettext("Installing app on watch…"));
+                            modal.find('.modal-body > p').text(messages.preparing || gettext("Installing app on watch…"));
                             if(modal.find('.progress').hasClass('progress-striped')) {
                                 modal.find('.progress').addClass('no-animation');
                                 _.defer(function() {
@@ -974,7 +978,14 @@ var show_clear_logs_prompt = function() {
         DoInstall: function(options) {
             var opts = options || {};
             var kind = opts.kind || CloudPebble.Compile.GetPlatformForInstall();
-            return install_on_watch(kind, opts.build);
+            return install_on_watch(kind, opts.build, opts.messages);
+        },
+        GetLastBuild: function() {
+            return mLastBuild;
+        },
+        /** The emulator platform to boot when none is running. */
+        GetEmulatorPlatform: function() {
+            return preferred_qemu_platform();
         },
         OnBuildStart: function(buildId) {
             mRunningBuild = true;

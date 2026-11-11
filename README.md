@@ -22,6 +22,7 @@ All runtime configuration lives in `.env`. Edit it before building:
 | `PEBBLE_SDK_VERSION` | `4.43` | SDK version installed in all containers (build fails if unset) |
 | `NODE_VERSION_WEB` | `24.22.1` | Node.js version in web/celery images |
 | `NODE_VERSION_YCMD` | `24.22.1` | Node.js version in ycmd image |
+| `PYPKJS_REF` | `master` | Branch, tag or commit of coredevices/pypkjs in the qemu image. Name a commit to pick up a pypkjs change: a rebuild reuses the cached `master` |
 | `NGINX_PORT` | `8080` | Host port nginx binds to |
 | `PUBLIC_URL` | `http://localhost:8080` | Public-facing URL (see note below) |
 | `GITHUB_HOOK_URL` | *(uses PUBLIC_URL)* | Base URL for GitHub webhook callbacks (see ngrok note below) |
@@ -266,6 +267,14 @@ The web and celery containers share the same Docker image. `RUN_WEB=yes` starts 
 4. Emulators auto-kill after 5 minutes without a ping
 
 Platforms: aplite (Pebble), basalt (Time), chalk (Time Round), diorite (Pebble 2), emery (Time 2), gabbro (Round 2)
+
+### Plugin preview
+
+A project with a plugin gets **Preview plugin** in the Compilation pane's Emulator tab. It installs the last build, tells the emulated phone that the ticked readings are the user's preferred ones (`preferences/complications`), then installs a demo app that shows them: the Dashboard watchapp or the Complication Face watchface from [coredevices/pebble-apps](https://github.com/coredevices/pebble-apps). Both are built into the web image at the commit named by the `PEBBLE_APPS_REF` build argument.
+
+Presetting readings needs a pypkjs whose built-in plugins include Preferences. With an older one the demo apps still run, but show the phone's default readings until tiles are picked on the Dashboard's settings page.
+
+A pbw's bundled settings page (`configPage`) is served by pypkjs inside the qemu container. The controller relays it at `/qemu/<emu>/config/<uuid>/`, sandboxed so that a project's HTML never runs with the IDE's origin.
 
 ### Code Completion
 

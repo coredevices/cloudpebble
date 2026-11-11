@@ -92,6 +92,14 @@
                             </div></div>
                             <p class="mic-status" role="status" aria-live="polite">{% trans 'Microphone input is off.' %}</p>
                             {% endif %}
+                            <div class="plugin-preview hide">
+                                <div class="tool-heading"><h4>{% trans 'Preview plugin' %}</h4></div>
+                                <p class="tool-description">{% trans 'See your plugin on a watch. This installs your last build, then a demo app that shows the readings you pick.' %}</p>
+                                <div class="tool-row plugin-preview-readings-row"><span class="tool-label">{% trans 'Readings' %} <span class="plugin-preview-count"></span></span><div class="plugin-preview-readings"></div></div>
+                                <div class="tool-row plugin-preview-viewers-row"><span class="tool-label">{% trans 'Show in' %}</span><div class="tool-actions plugin-preview-viewers"></div></div>
+                                <div class="tool-row plugin-preview-settings-row"><span class="tool-label">{% trans 'Settings pages' %}</span><div class="tool-actions plugin-preview-settings"></div></div>
+                                <p class="plugin-preview-status mic-status" role="status" aria-live="polite"></p>
+                            </div>
                             <div class="tool-row plugin-tool-row"><div><h4>{% trans 'Phone plugins' %}</h4><p class="tool-description">{% trans 'Inspect available sources and actions.' %}</p></div>
                                 <button type="button" class="btn" data-mic-action="plugins">{% trans 'List plugins' %}</button>
                             </div>
