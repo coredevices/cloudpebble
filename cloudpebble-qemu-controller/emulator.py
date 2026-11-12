@@ -2,6 +2,7 @@ __author__ = 'katharine'
 
 import gevent
 import gevent.pool
+import gevent.select
 import logging
 import os
 import re
@@ -11,10 +12,20 @@ import shutil
 import socket
 import subprocess
 import itertools
+import time
 import uuid as _uuid
 
 AUDIO_PLATFORMS = ('emery', 'flint')
 _PACTL_MODULE_ID_RE = re.compile(r'^\s*(\d+)\s*$', re.MULTILINE)
+
+BOOT_MARKERS = (b"<SDK Home>", b"<Launcher>", b"Ready for communication")
+BOOT_TIMEOUT = 120
+# How long a booted watch has to print a marker. Answering doesn't mean its first app has started.
+MARKER_GRACE = 5
+PROBE_INTERVAL = 1
+# A WatchVersionRequest in a QEMU SPP frame, and the start of the response.
+WATCH_VERSION_REQUEST = bytes.fromhex('feed000100050001001000beef')
+WATCH_VERSION_RESPONSE = re.compile(rb'\xfe\xed\x00\x01....\x00\x10\x01', re.DOTALL)
 
 _used_displays = set()
 def _find_display():
@@ -267,16 +278,55 @@ class Emulator(object):
         else:
             raise Exception("Emulator launch timed out.")
 
-        received = b''
-        for i in range(150):
-            gevent.sleep(0.2)
-            received += s.recv(256)
-            # PBL-21275: we'll add less hacky solutions for this to the firmware.
-            if b"<SDK Home>" in received or b"<Launcher>" in received or b"Ready for communication" in received:
-                break
-        else:
-            raise Exception("Didn't get ready message from firmware.")
-        s.close()
+        try:
+            self._wait_for_boot(s)
+        finally:
+            s.close()
+
+    def _wait_for_boot(self, console):
+        deadline = time.monotonic() + BOOT_TIMEOUT
+        protocol = None
+        answered_at = None
+        next_probe = 0
+        log = b''
+        replies = b''
+        try:
+            while not any(marker in log for marker in BOOT_MARKERS):
+                now = time.monotonic()
+                if answered_at is not None and now - answered_at >= MARKER_GRACE:
+                    return
+                if now >= deadline:
+                    raise Exception("Didn't get ready message from firmware.")
+                if answered_at is None and now >= next_probe:
+                    next_probe = now + PROBE_INTERVAL
+                    try:
+                        if protocol is None:
+                            protocol = socket.create_connection(('localhost', self.bt_port))
+                        protocol.sendall(WATCH_VERSION_REQUEST)
+                    except socket.error:
+                        if protocol is not None:
+                            protocol.close()
+                            protocol = None
+                sockets = [console] if protocol is None else [console, protocol]
+                for ready in gevent.select.select(sockets, [], [], 0.1)[0]:
+                    try:
+                        data = ready.recv(256)
+                    except socket.error:
+                        data = b''
+                    if ready is console:
+                        if not data:
+                            raise Exception("Emulator exited while the firmware was booting.")
+                        log += data
+                    elif data:
+                        replies += data
+                        if answered_at is None and WATCH_VERSION_RESPONSE.search(replies):
+                            answered_at = time.monotonic()
+                    else:
+                        protocol.close()
+                        protocol = None
+        finally:
+            if protocol is not None:
+                protocol.close()
 
     def _spawn_pkjs(self):
         env = os.environ.copy()
