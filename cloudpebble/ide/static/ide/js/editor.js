@@ -123,6 +123,10 @@ CloudPebble.Editor = (function() {
             runStatus.setInstall('waiting', gettext("Running"));
             runStatus.hide();
             runStatus = null;
+            if (runOnEmulator && CloudPebble.PluginPreview.CanRunInDashboard()) {
+                // A plugin alone shows nothing: run it in the Dashboard, which reads it.
+                return CloudPebble.PluginPreview.RunInDashboard(build).catch(alert);
+            }
             if (CloudPebble.ProjectProperties.is_runnable) {
                 return CloudPebble.Compile.DoInstall({kind: runTarget, build: build}).then(function() {
                     return null;

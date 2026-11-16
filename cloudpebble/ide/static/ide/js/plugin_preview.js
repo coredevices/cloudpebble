@@ -58,11 +58,70 @@ CloudPebble.PluginPreview = (function() {
         });
     }
 
+    function storageKey() { return 'pluginPreviewReadings:' + PROJECT_ID; }
+
+    /** The readings picked for this project, as saved by the Compilation pane (or the defaults). */
+    function savedSelection() {
+        var available = readings(CloudPebble.ProjectInfo.plugin);
+        var saved = null;
+        try { saved = JSON.parse(localStorage[storageKey()]); } catch (e) { /* nothing saved */ }
+        var chosen = restoreSelection(available, saved);
+        return _.filter(available, function(reading) { return _.contains(chosen, reading.key); });
+    }
+
+    /** Resolves to whether this emulator's phone can be told which readings are preferred. */
+    function setReadings(pebble, chosen) {
+        return pebble.simulator_command(0x0d, '\x02').then(function(plugins) {
+            var supported = _.some(plugins, function(plugin) { return _.contains(plugin.sources, SOURCE); });
+            if (!supported) return false;
+            // No choice puts back the phone's own defaults.
+            var instances = chosen.length ? complicationInstances(chosen) : null;
+            return pebble.simulator_command(0x0d, '\x01' + JSON.stringify({source: SOURCE, instances: instances}))
+                .then(function() { return true; });
+        });
+    }
+
+    /** Installs `build`, presets the `chosen` readings, then runs `viewer` on the emulator. */
+    function showIn(viewer, build, chosen, status) {
+        status = status || function() {};
+        if (!build || build.state != 3 || !build.download) {
+            status(!build ? gettext('Run a build first: the preview installs your last build.')
+                : build.state == 1 ? gettext('Wait for the build to finish, then try again.')
+                : gettext('The last build failed. Fix it and build again to preview.'));
+            return Promise.resolve();
+        }
+        var kind = SharedPebble.isVirtual() ? ConnectionType.Qemu : CloudPebble.Compile.GetEmulatorPlatform();
+        status(gettext('Installing your build…'));
+        return CloudPebble.Compile.DoInstall({kind: kind, build: build, messages: {
+            preparing: gettext('Installing your build…'),
+            success: gettext('Your build is installed. Setting up the preview…')
+        }}).then(function(pebble) {
+            // No pebble: the install offered to reboot the emulator instead.
+            if (!pebble) { status(gettext('The install did not finish. Try again once the emulator is back.')); return; }
+            return setReadings(pebble, chosen).then(function(supported) {
+                var outcome;
+                if (!supported) {
+                    outcome = interpolate(gettext('%s is running, but this emulator cannot preset readings. Open its settings to pick your plugin’s readings.'), [viewer.name]);
+                } else if (chosen.length) {
+                    outcome = interpolate(ngettext('%s is showing %s reading from your plugin.', '%s is showing %s readings from your plugin.', chosen.length), [viewer.name, chosen.length]);
+                } else {
+                    outcome = interpolate(gettext('%s is showing the emulator’s built-in readings. Tick some of yours to see them.'), [viewer.name]);
+                }
+                status(interpolate(gettext('Installing %s…'), [viewer.name]));
+                return CloudPebble.Compile.DoInstall({kind: ConnectionType.Qemu, build: {download: viewer.url, sizes: {}}, messages: {
+                    preparing: interpolate(gettext('Installing %s…'), [viewer.name]),
+                    success: outcome
+                }}).then(function(installed) {
+                    status(installed ? outcome : gettext('The install did not finish. Try again once the emulator is back.'));
+                });
+            });
+        });
+    }
+
     function init(pane) {
         var root = pane.find('.plugin-preview');
         var viewers = window.PLUGIN_PREVIEW_VIEWERS || [];
         var busy = false;
-        var storageKey = 'pluginPreviewReadings:' + PROJECT_ID;
 
         function status(text) { root.find('.plugin-preview-status').text(text); }
 
@@ -85,9 +144,7 @@ CloudPebble.PluginPreview = (function() {
             var hasPlugin = !_.isEmpty(CloudPebble.ProjectInfo.plugin);
             root.toggleClass('hide', !hasPlugin);
             if (!hasPlugin) return;
-            var saved = null;
-            try { saved = JSON.parse(localStorage[storageKey]); } catch (e) { /* nothing saved */ }
-            var chosen = restoreSelection(list, saved);
+            var chosen = keysOf(savedSelection());
             var holder = root.find('.plugin-preview-readings').empty();
             _.each(list, function(reading) {
                 var label = $('<label class="plugin-preview-reading">').appendTo(holder);
@@ -121,59 +178,14 @@ CloudPebble.PluginPreview = (function() {
             else if (!root.find('.plugin-preview-status').text()) status(gettext('Pick where to show your readings.'));
         }
 
-        /** Resolves to whether this emulator's phone can be told which readings are preferred. */
-        function setReadings(pebble, chosen) {
-            return pebble.simulator_command(0x0d, '\x02').then(function(plugins) {
-                var supported = _.some(plugins, function(plugin) { return _.contains(plugin.sources, SOURCE); });
-                if (!supported) return false;
-                // No choice puts back the phone's own defaults.
-                var instances = chosen.length ? complicationInstances(chosen) : null;
-                return pebble.simulator_command(0x0d, '\x01' + JSON.stringify({source: SOURCE, instances: instances}))
-                    .then(function() { return true; });
-            });
-        }
-
         function preview(viewer) {
-            var build = CloudPebble.Compile.GetLastBuild();
-            if (!build || build.state != 3 || !build.download) {
-                status(!build ? gettext('Run a build first: the preview installs your last build.')
-                    : build.state == 1 ? gettext('Wait for the build to finish, then try again.')
-                    : gettext('The last build failed. Fix it and build again to preview.'));
-                return Promise.resolve();
-            }
-            var chosen = selected();
-            var kind = SharedPebble.isVirtual() ? ConnectionType.Qemu : CloudPebble.Compile.GetEmulatorPlatform();
-            status(gettext('Installing your build…'));
-            return CloudPebble.Compile.DoInstall({kind: kind, build: build, messages: {
-                preparing: gettext('Installing your build…'),
-                success: gettext('Your build is installed. Setting up the preview…')
-            }}).then(function(pebble) {
-                // No pebble: the install offered to reboot the emulator instead.
-                if (!pebble) { status(gettext('The install did not finish. Try again once the emulator is back.')); return; }
-                return setReadings(pebble, chosen).then(function(supported) {
-                    status(interpolate(gettext('Installing %s…'), [viewer.name]));
-                    return CloudPebble.Compile.DoInstall({kind: ConnectionType.Qemu, build: {download: viewer.url, sizes: {}}, messages: {
-                        preparing: interpolate(gettext('Installing %s…'), [viewer.name]),
-                        success: interpolate(gettext('%s is running on the emulator.'), [viewer.name])
-                    }}).then(function(installed) {
-                        if (!installed) { status(gettext('The install did not finish. Try again once the emulator is back.')); return; }
-                        if (!supported) {
-                            status(interpolate(gettext('%s is running, but this emulator cannot preset readings. Open its settings to pick your plugin’s readings.'), [viewer.name]));
-                        } else if (chosen.length) {
-                            status(interpolate(ngettext('%s is showing %s reading from your plugin.', '%s is showing %s readings from your plugin.', chosen.length), [viewer.name, chosen.length]));
-                        } else {
-                            status(interpolate(gettext('%s is showing the emulator’s built-in readings. Tick some of yours to see them.'), [viewer.name]));
-                        }
-                    });
-                });
-            }).catch(function(error) {
-                status(error.message || String(error));
-            });
+            return showIn(viewer, CloudPebble.Compile.GetLastBuild(), selected(), status)
+                .catch(function(error) { status(error.message || String(error)); });
         }
 
         root.on('change', '.plugin-preview-readings input', function() {
             enforceLimit();
-            localStorage[storageKey] = JSON.stringify(keysOf(selected()));
+            localStorage[storageKey()] = JSON.stringify(keysOf(selected()));
         });
         root.on('click', '.plugin-preview-viewers .btn', function() {
             if (busy) return;
@@ -196,7 +208,7 @@ CloudPebble.PluginPreview = (function() {
         });
 
         render();
-        return {render: render};
+        return {render: render, status: status};
     }
 
     var instance = null;
@@ -207,6 +219,15 @@ CloudPebble.PluginPreview = (function() {
         restoreSelection: restoreSelection,
         complicationInstances: complicationInstances,
         Init: function(pane) { instance = init(pane); },
+        /** Whether the Run button should open a plugin project in the Dashboard rather than just install it. */
+        CanRunInDashboard: function() {
+            return CloudPebble.ProjectInfo.type === 'plugin' && !!_.findWhere(window.PLUGIN_PREVIEW_VIEWERS || [], {id: 'dashboard'});
+        },
+        /** Installs `build` and opens it in the Dashboard with the readings picked in the Compilation pane. */
+        RunInDashboard: function(build) {
+            var dashboard = _.findWhere(window.PLUGIN_PREVIEW_VIEWERS || [], {id: 'dashboard'});
+            return showIn(dashboard, build, savedSelection(), instance ? instance.status : null);
+        },
         /** The plugin's sources may have changed in Settings since the pane was built. */
         Refresh: function() { if (instance) instance.render(); }
     };
